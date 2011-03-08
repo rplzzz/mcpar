@@ -3,57 +3,155 @@
 #include "func.hh"
 #include "mcpar.hh"
 
-namespace mcp {
-
-  enum {OK, INVALID, ERROR};
+//  enum {OK, INVALID, ERROR};    // XXX move to header as class member
   
-  int mcpar(MCparm &parms, float *y, VLFunc &L, MCout &outsamples,
-            MPIWrapper *mpi, float *incov)
-  {
-    int nparm  = parms.nparm();
-    int nchain = parms.nchain();
-    int rank   = mpi ? mpi.rank() : 0;
-
-    // set up the covariance matrix.  Copy incov if it was provided; otherwise use identity matrix
-    int ncov   = nparam*nparam;
-    float *cov = new float[ncov];
-    if(incov)
-      for(int i=0; i<ncov; ++i)
-        cov[i] = incov[i];
-    else {
-      for(int i=0; i<ncov; ++i)
-        cov[i] = 0.0f;
-      for(int i=0; i<nparam; ++i) {
-        int indx = i*(nparam+1);
-        cov[indx] = 1.0f;
+int MCP::mcpar(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &outsamples,
+               MPIWrapper *mpi, float *incov)
+{
+  int nparm  = parms.nparm();
+  int nchain = parms.nchain();
+  int ntot   = nparm*nchain;
+  int rank   = mpi ? mpi.rank() : 0;
+  int size   = mpi ? mpi.size() : 1; // number of MPI processes
+  int tsize  = size*nchain;          // total number of chains across all processes
+  
+  
+  // set up the covariance matrix.  Copy incov if it was provided; otherwise use identity matrix
+  int ncov   = nparam*nparam;
+  float *cov = new float[ncov];
+  if(incov)
+    for(int i=0; i<ncov; ++i)
+      cov[i] = incov[i];
+  else {
+    for(int i=0; i<ncov; ++i)
+      cov[i] = 0.0f;
+    for(int i=0; i<nparam; ++i) {
+      int indx = i*(nparam+1);
+      cov[indx] = 1.0f;
+    }
+  }
+  
+  // set up the rng
+  // CAUTION!: the MKL only has 1024 independent MT rngs, so you can only do up to
+  // 1024 processes at a time.  Within one process the random numbers are interleaved
+  // amongst the markov chains, so you can have as many as you want.
+  if(rank>1024) {
+    std::cerr << "Invalid rank > 1024 : rank = " << rank << "\n";
+    return ERROR;
+  }
+  int rngid = rank+VSL_BRNG_MT2203;
+  VSLStreamStatePtr rng;
+  vslNewStream(&rng, rngid, 8675309);
+  
+  
+  // here are the things we will need to do the monte carlo
+  // XXX move the declarations to class and allocations to constructor
+  float *pvals  = new float[ntot]; // parameter values
+  float *ptrial = new float[ntot]; // trial parameters
+  float *mu     = new float[ntot]; // parameter means - incremental update
+  float *sig    = new float[ntot]; // parameter stdevs - incremental update
+  float *musig  = new float[2*tsize]; // mu&sig from all chains across all procs
+  float *lylast = new float[nchain]; // previous log-likelihood values
+  float *lytrial = new float[nchain]; // trial log-likelihood values
+  float *pacpt  = new float[nchain]; // acceptance probability
+  float *acpt   = new float[nchain]; // test for acceptance
+  float scale   = 1.0f;
+  float ntrial  = 0.0f;
+  float naccept = 0.0f;
+    
+  // copy input guesses to our working array
+  for(int j=0;j<ntot;++j)
+    pvals[j] = parms.pvals[j];
+  
+  // first step - burn in.  Run the MC, but don't perform any remote updates
+  int irate = nburn/10;
+  for(int i = 0; i<nburn; ++i) {
+    genLocal(nparm, nchain, parms, rng, ptrial);
+    L(ptrial, ytrial);
+    
+    // XXX generate acpt from rng
+    
+    for(int j=0; j<nchain; ++j) {
+      pacpt[j] = exp(ytrial[j]-ylast[j]);
+      ylast[j] = acpt[j]<pacpt[j] ? ytrial[j] : ylast[j];
+    }
+    
+    ntrial += nchain;
+    for(int j=0; j<nchain; ++j) {
+      int idx = j*nparm;
+      if(acpt[j] < pacpt[j]) {
+        naccept += 1.0f;
+        for(int k=0; k<nparm; ++k,++idx)
+          pvals[idx] = ptrial[idx];
       }
     }
-
-    // set up the rng
-    // CAUTION!: the MKL only has 1024 independent MT rngs, so you can only do up to
-    // 1024 processes at a time.  Within one process the random numbers are interleaved
-    // amongst the markov chains, so you can have as many as you want.
-    if(rank>1024) {
-      std::cerr << "Invalid rank > 1024 : rank = " << rank << "\n";
-      return ERROR;
+    
+    // tune acceptance rate
+    if(i>irate) {
+      float arate = naccept/ntrial;
+      if(arate < TGT_ARATE_MIN) {
+        naccept = ntrial = 0.0f; // reset the counters if we change size
+        for(j=0;j<ncov;++j)
+          cov[j] *= STEP_DEC;
+      }
+      else if(arate > TGT_ARATE_MAX) {
+        naccept = ntrial = 0.0f; // reset counters
+        for(j=0;j<ncov;++j)
+          cov[j] *= STEP_INC;
+      } 
+      // evaluate again in 50 steps
+      irate += 50;
+    } 
+  }
+  
+  // run the "keeper" samples, including remote proposals.  To keep
+  // the calc well-vectorized, we do one check for whether to take a
+  // local proposal or a remote one and apply it to all of the
+  // chains in this process.
+  for(int i=0; i<nsamp; ++i) {
+    float rndlocl;            // random draw to see if we do local or remote proposal
+    if(i<SYNCSTEP)
+      rndlocl = 0.0f;        // no data for remote proposal yet.
+    else
+      //XXX get random from rng
+      rndlocl = rndg();
+    
+    float cfac; // Metropolis-Hastings detailed balance correction factor
+    if(rndlocl < PLOCAL) {
+      genLocal(nparm, nchain, parms, rng, ptrial);
+      lcfac = 1.0f;
     }
-    int rngid = rank+VSL_BRNG_MT2203;
-    VSLStreamStatePtr rng;
-    vslNewStream(&rng, rngid, 8675309);
-        
-
-    // here are the things we will need to do the monte carlo
-    float *trial = new float[nparm]; // trial parameters
-    float *mu    = new float[nparm]; // parameter means - incremental update
-    float *sig   = new float[nparm]; // parameter stdevs - incremental update
-    float scale  = 1.0f;
-    int   ntrial = 0;
-    int  naccept = 0;
+    else {
+      genRemote(nparm, nchain, parms, muall, sigall, rng, ptrial, &cfac);
+    }
+    L(ptrial,ytrial);
+    
+    for(int j=0; j<nchain; ++j) {
+      pacpt[j] = exp(ytrial[j]-ylast[j]);
+      ylast[j] = acpt[j]<pacpt[j] ? ytrial[j] : ylast[j];
+    }
+    
+    ntrial += nchain;
+    for(int j=0; j<nchain; ++j) {
+      int idx = j*nparm;
+      if(acpt[j] < pacpt[j]) {
+        naccept += 1.0f;
+        for(int k=0; k<nparm; ++k,++idx)
+          pvals[idx] = ptrial[idx];
+      }
+    }
+    
     
 
+  }
     
-    
-    // cleanup
-    vsldeletestream(rng);
-    delete [] cov;
+  // cleanup //XXX move to destructor
+  delete [] acpt;
+  delete [] pacpt;
+  delete [] sig;
+  delete [] mu;
+  delete [] ptrial;
+  delete [] pvals;
+  vsldeletestream(rng);
+  delete [] cov;
   }
