@@ -3,13 +3,12 @@
 #include "func.hh"
 #include "mcpar.hh"
 
-//  enum {OK, INVALID, ERROR};    // XXX move to header as class member
   
-int MCP::mcpar(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &outsamples,
+int MCPar::run(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &outsamples,
                MPIWrapper *mpi, float *incov)
 {
-  int nparm  = parms.nparm();
-  int nchain = parms.nchain();
+  int nparm  = parms.nparm();   // XXX move to constructor
+  int nchain = parms.nchain();  // XXX move to constructor
   int ntot   = nparm*nchain;
   int rank   = mpi ? mpi.rank() : 0;
   int size   = mpi ? mpi.size() : 1; // number of MPI processes
@@ -17,8 +16,6 @@ int MCP::mcpar(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &
   
   
   // set up the covariance matrix.  Copy incov if it was provided; otherwise use identity matrix
-  int ncov   = nparam*nparam;
-  float *cov = new float[ncov];
   if(incov)
     for(int i=0; i<ncov; ++i)
       cov[i] = incov[i];
@@ -31,30 +28,8 @@ int MCP::mcpar(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &
     }
   }
   
-  // set up the rng
-  // CAUTION!: the MKL only has 1024 independent MT rngs, so you can only do up to
-  // 1024 processes at a time.  Within one process the random numbers are interleaved
-  // amongst the markov chains, so you can have as many as you want.
-  if(rank>1024) {
-    std::cerr << "Invalid rank > 1024 : rank = " << rank << "\n";
-    return ERROR;
-  }
-  int rngid = rank+VSL_BRNG_MT2203;
-  VSLStreamStatePtr rng;
-  vslNewStream(&rng, rngid, 8675309);
-  
   
   // here are the things we will need to do the monte carlo
-  // XXX move the declarations to class and allocations to constructor
-  float *pvals  = new float[ntot]; // parameter values
-  float *ptrial = new float[ntot]; // trial parameters
-  float *mu     = new float[ntot]; // parameter means - incremental update
-  float *sig    = new float[ntot]; // parameter stdevs - incremental update
-  float *musig  = new float[2*tsize]; // mu&sig from all chains across all procs
-  float *lylast = new float[nchain]; // previous log-likelihood values
-  float *lytrial = new float[nchain]; // trial log-likelihood values
-  float *pacpt  = new float[nchain]; // acceptance probability
-  float *acpt   = new float[nchain]; // test for acceptance
   float scale   = 1.0f;
   float ntrial  = 0.0f;
   float naccept = 0.0f;
@@ -139,19 +114,62 @@ int MCP::mcpar(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &
         for(int k=0; k<nparm; ++k,++idx)
           pvals[idx] = ptrial[idx];
       }
-    }
-    
-    
+    } 
 
   }
     
-  // cleanup //XXX move to destructor
+}
+
+MCPar::MCPar(int np, int nc=1, int mpisiz=1, int mpirank=0) :
+  nparm(np), nchain(nc), size(mpisiz), rank(mpirank)
+{
+  ntot = np*nc;
+  ncov = np*np;
+
+  tsize = mpisiz*nchain;
+  mpi   = mpisiz>1;             // if mpisiz<=1, assume we're not running with MPI
+
+  // allocate arrays
+  pvals   = new float[ntot];
+  ptrial  = new float[ntot];
+  mu      = new float[ntot];
+  sig     = new float[ntot];
+  
+  musig   = new float[2*tsize]; 
+
+  lylast  = new float[nchain];
+  lytrial = new float[nchain];
+  pacpt   = new float[nchain];
+  acpt    = new float[nchain];
+  
+  cov     = new float[ncov];
+
+  // set up the rng
+  // CAUTION!: the MKL only has 1024 independent MT rngs, so you can only do up to
+  // 1024 processes at a time.  Within one process the random numbers are interleaved
+  // amongst the markov chains, so you can have as many as you want.
+  rng = NULL;
+  if(rank>1024) {
+    std::cerr << "Invalid rank > 1024 : rank = " << rank << "\n";
+    throw("Invalid rank > 1024"); // XXX replace with a real exception class.
+  } 
+  int rngid = rank+VSL_BRNG_MT2203;
+  vslNewStream(&rng, rngid, 8675309); 
+}
+
+MCPar::~MCPar()
+{
+  if(rng)
+    vsldeletestream(rng);
+
+  delete [] cov;
   delete [] acpt;
   delete [] pacpt;
+  delete [] lytrial;
+  delete [] lylast;
+  delete [] musig;
   delete [] sig;
   delete [] mu;
   delete [] ptrial;
   delete [] pvals;
-  vsldeletestream(rng);
-  delete [] cov;
-  }
+}
