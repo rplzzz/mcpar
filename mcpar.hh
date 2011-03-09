@@ -40,7 +40,7 @@ private:
   float *pacpt;                 // acceptance probability [nchain]
   float *acpt;                  // test for acceptance [nchain]
   
-  VSLStreamStatePtr rng;        // pointer to the rng
-  
+  VSLStreamStatePtr rng;        // pointer to the rng 
+};
 
 #endif
