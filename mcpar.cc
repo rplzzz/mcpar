@@ -7,14 +7,6 @@
 int MCPar::run(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &outsamples,
                MPIWrapper *mpi, float *incov)
 {
-  int nparm  = parms.nparm();   // XXX move to constructor
-  int nchain = parms.nchain();  // XXX move to constructor
-  int ntot   = nparm*nchain;
-  int rank   = mpi ? mpi.rank() : 0;
-  int size   = mpi ? mpi.size() : 1; // number of MPI processes
-  int tsize  = size*nchain;          // total number of chains across all processes
-  
-  
   // set up the covariance matrix.  Copy incov if it was provided; otherwise use identity matrix
   if(incov)
     for(int i=0; i<ncov; ++i)
@@ -23,7 +15,7 @@ int MCPar::run(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &
     for(int i=0; i<ncov; ++i)
       cov[i] = 0.0f;
     for(int i=0; i<nparam; ++i) {
-      int indx = i*(nparam+1);
+      int indx = i*(nparam+1);  // ith diagonal element
       cov[indx] = 1.0f;
     }
   }
@@ -41,7 +33,7 @@ int MCPar::run(int nsamp, int nburn, MCparm &parms, float *y, VLFunc &L, MCout &
   // first step - burn in.  Run the MC, but don't perform any remote updates
   int irate = nburn/10;
   for(int i = 0; i<nburn; ++i) {
-    genLocal(nparm, nchain, parms, rng, ptrial);
+    genLocal(nparm, nchain, parms, rng, cov, ptrial);
     L(ptrial, ytrial);
     
     // XXX generate acpt from rng
