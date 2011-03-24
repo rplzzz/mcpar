@@ -6,9 +6,14 @@ MKLLIBS    = -lmkl_solver_lp64_sequential -Wl,--start-group -lmkl_intel_lp64 -lm
 LIBS = #-lmpi
 
 CXX      = icpc
-CXXFLAGS = -g -I$(MKLINC) -restrict
+CXXFLAGS = -g -MMD -O0 -I$(MKLINC) -restrict
 
 OBJS = mcpar.o rosenbrock.o 
+DEPS = $(OBJS:.o=.d)
+
+include $(DEPS)
+
+all: mcpar-gauss
 
 mcpar-gauss: mcpar-gauss.o $(OBJS)
 	$(CXX) -L$(MKLLIBDIR) -o mcpar-gauss mcpar-gauss.o $(OBJS) $(LIBS) $(MKLLIBS)

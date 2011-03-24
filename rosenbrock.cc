@@ -51,7 +51,7 @@ int Gaussian::operator()(int npset, const float *x, float *restrict fx)
     int j=i/n;
     int k=i%n;
     float arg = x[i]-mu[k];
-    fx[j] -= arg*arg*sig2inv[k];
+    fx[j] -= 0.5f*arg*arg*sig2inv[k];
   }
 
   // note that these goal functions are log-likelihood, so we don't

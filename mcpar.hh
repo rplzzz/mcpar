@@ -4,6 +4,7 @@
 #include "mkl.h"
 #include "vlfunc.hh"
 #include "mcout.hh"
+#include <stdlib.h>
 
 class MCPar {
 public:
@@ -19,6 +20,8 @@ public:
   const int SYNCSTEP;           // frequency (number of steps) with
                                 // which to synchronize gaussian
                                 // posterior estimates
+
+  static const float FPEPS;     // small number for preventing divide by zero and the like
 
   //! Constructor
   MCPar(int np, int nc=1, int mpisiz=1, int mpirank=0, float pl=0.9,
@@ -79,5 +82,7 @@ private:
   
   VSLStreamStatePtr rng;        // pointer to the rng 
 };
+
+#define VSL_CALL_CHK(c) {int stat = (c); if(stat != VSL_STATUS_OK) abort();}
 
 #endif
