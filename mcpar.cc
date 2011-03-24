@@ -6,6 +6,7 @@
 #include "mcout.hh"
 #include <math.h>
 
+const float MCPar::FPEPS = 1.0e-14;
 
 int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsamples,
                float * incov)
@@ -13,7 +14,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   covar_setup(incov, cov);
   
   // pre-allocate space for the samples
-  outsamples.newsamps(nsamp); 
+  outsamples.newsamps(nsamp*nchain); 
   
   // here are the things we will need to do the monte carlo
   float ntrial  = 0.0f;
@@ -34,7 +35,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     L(nchain, ptrial, lytrial);
 
     // fill acpt with random numbers uniform on [0,1]
-    stat = vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f);
+    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
     
     ntrial += nchain;
     for(int j=0; j<nchain; ++j) {
@@ -69,18 +70,24 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       irate += 10;              // XXX reset to 50 when testing complete
     } 
   }
+
+  // initialize mu and psum2
+  for(int i=0;i<ntot;++i) {
+    mu[i] = 0.0f;
+    psum2[i] = FPEPS;           // prevent divide by zero
+  }
+  float pwgt=0.0f;               // total weight in the mu, sigma calcs.
   
   // run the "keeper" samples, including remote proposals.  To keep
   // the calc well-vectorized, we do one check for whether to take a
   // local proposal or a remote one and apply it to all of the
   // chains in this process.
-  float pwgt=0.0f;               // total weight in the mu, sigma calcs.
   for(int isamp=0; isamp<nsamp; ++isamp) {
     float rndlocal;            // random draw to see if we do local or remote proposal
     if(isamp<SYNCSTEP)
       rndlocal = 0.0f;        // no data for remote proposal yet.
     else
-      stat = vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, 1, &rndlocal, 0.0f, 1.0f);
+      VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, 1, &rndlocal, 0.0f, 1.0f)) ;
     
     // Should cfac include the total pdf (i.e., cfac = 0.9*cflocal +
     // 0.1*cfremote, irrespective of whether we are doing a remote or
@@ -97,7 +104,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     L(nchain, ptrial,lytrial);
     
     // fill acpt with random numbers uniform on [0,1]
-    stat = vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f); 
+    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
     
     ntrial += nchain;
     for(int j=0; j<nchain; ++j) {
@@ -121,6 +128,16 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     pwgt += 1.0f;
     float winv = 1.0f/pwgt;
     for(int i=0; i<ntot; ++i) {
+      int j     = i/nparam;
+      if(remotep && acpt[j] < pacpt[j]) { // accepted a remote proposal
+        // replace mu and sigma with the remote values.  We have to
+        // reconstruct psum2.  Since we're plugging in (effectively)
+        // *last* iteration's sigma^2, we do that by multiplying by n-1.
+        mu[i]    = mutrial[i];
+        sig[i]   = sigtrial[i];
+        psum2[i] = sig[i]*(pwgt-1.0f);
+      }
+      
       float delta = pvals[i] - mu[i];
       mu[i] += delta * winv;
       psum2[i] += delta*(pvals[i]-mu[i]); // one factor of old mean, one factor of new
@@ -128,26 +145,15 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
                                 // it's not worth the extra fdiv.
       
       // Write the new estimates of mu and sigma into the MPI array.
-      // If the proposal was remote and it was accepted, use the mu
-      // and sigma from the remote proposal distribution; otherwise,
-      // use the updated estimates we calculated above.
       int islot = 2*(rank*ntot+i);
-      int j     = i/nparam;
-      if(remotep && acpt[j]<pacpt[j]) { // accepted a remote proposal
-        musigall[islot]   = mutrial[i];
-        musigall[islot+1] = sigtrial[i];
-      }
-      else {                            // local or rejected proposal
-        musigall[islot]   = mu[i];
-        musigall[islot+1] = sig[i];
-      }
+      musigall[islot]   = mu[i];
+      musigall[islot+1] = sig[i];
     }                                    /* end of loop over all params */
 
     // sync with MPI peers, if any
     if(mpi && (isamp % SYNCSTEP == 0)) {
       // do MPI_Allgather:  not yet implemented 
-    }
-    
+    } 
   }                                      /* end of loop over samples */
   return 0;
 }
@@ -172,6 +178,7 @@ MCPar::MCPar(int np, int nc, int mpisiz, int mpirank, float pl,
   sig     = new float[ntot];
   mutrial = new float[ntot];
   sigtrial= new float[ntot];
+  qiarg   = new float[ntot];
   
   musigall= new float[2*tchains*nparam]; 
 
@@ -219,6 +226,7 @@ MCPar::~MCPar()
   delete [] lytrial;
   delete [] lylast;
   delete [] musigall;
+  delete [] qiarg;
   delete [] sigtrial;
   delete [] mutrial;
   delete [] sig;
@@ -233,9 +241,9 @@ int MCPar::genLocal(const float pvals[], float *restrict ptrial, float *restrict
 {
   for(int j=0; j<nchain; ++j) {
     int indx = j*nparam;
-    int stat = vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
-                               ptrial+indx, nparam, VSL_MATRIX_STORAGE_FULL,
-                               pvals+indx, cov );
+    VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+                                 ptrial+indx, nparam, VSL_MATRIX_STORAGE_FULL,
+                                 pvals+indx, cov ));
     cfac[j] = 1.0f;             // gaussian is symmetric
   }
   return 0;
@@ -258,28 +266,31 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
 
   do {
   
-    // get random integer from 1..tchains for each chain.  We will use
+    // get random integer from 0..tchains-1 for each chain.  We will use
     // that to select a Q_i.
-    int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 1, tchains+1);
+    int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 0, tchains);
     
     for(int j=0; j<nchain; ++j) {
       if(rjct[j]) {
         for(int i=0; i<nparam; ++i) {
-          int indx = 2*(nparam*chnsel[j] + i);
-          mutrial[j+i]  = musigall[indx]; 
-          // store 1/sig for use in vsRngGaussianMV
-          sigtrial[j+i] = 1.0f/musigall[indx+1];
+          int tindx = 2*(nparam*chnsel[j] + i); // "total index" 
+          int cindx  = j*nparam+i;                // "chain index"
+          mutrial[cindx]  = musigall[tindx]; 
+          // recall "sig" is actually sig^2
+          sigtrial[cindx] = musigall[tindx+1];
         } 
-        int stat = vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
-                                   ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
-                                   mutrial+j*nparam, sigtrial+j*nparam );
+        VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+                                     ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
+                                     mutrial+j*nparam, sigtrial+j*nparam )) ;
       }
     }
     
-    // use acpt to accumulate sum_i(Q_i); use pacpt to accumulate max_i(Q_i)
+
     for(int j=0; j<nchain; ++j)
-      if(rjct[j])
-        acpt[j] = pacpt[j] = 0.0f;
+      if(rjct[j]) {
+        qimax[j] = 0.0f;
+        qisum[j] = FPEPS;
+      }
       else {                    // new params have been accepted for this chain
         // ensure that we have a zero pacpt at the end, so we don't
         // disturb the values accepted by this chain.
@@ -289,7 +300,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
     
     for(int qi=0; qi<tchains; ++qi) { // loop over all Q_i
       for(int i=0; i<ntot; ++i) {     // all parameters in all chains
-        int indx  = 2*(qi*nparam + i);            // index in the master mu-sigma array
+        int indx  = 2*(qi*nparam + i%nparam); // index in the master mu-sigma array
         float xm   = musigall[indx] - ptrial[i];  // x-mu
         float sig2 = musigall[indx+1];            // sig^2
         
@@ -321,7 +332,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
       pacpt[j] = qimax[j]/qisum[j];      // ==0.0 for any chains that have already been accepted
     
     // generate acpt
-    stat = vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f);
+    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f));
 
     anyrjct = 0;
     
@@ -347,7 +358,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
         for(int qi=0; qi<tchains; ++qi) { // loop over all Q_i
           float arg= 0.0f;
           for(int i=ip0; i<ip1; ++i) { // all the parameters in this chain.
-            int indx  = 2*(qi*nparam + i);
+            int indx  = 2*(qi*nparam + i%nparam);
             float xm   = musigall[indx] - pvals[i];   // x-mu
             float sig2 = musigall[indx+1];            // sig^2
             
@@ -355,11 +366,11 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
           }
 
           // arg is the sum over all Q_i of (x-mu_i)^2/sig^2
-          float gv = exp(-arg); // Gaussian value for Q_i
+          float gv = exp(-arg); // Gaussian value for Q_i   // XXX Move me outside the loop!
           cfac[j] = gv > cfac[j] ? gv : cfac[j];
         }
 
-        cfac[j] /= qimax[j];
+        cfac[j] /= qimax[j]+FPEPS;
       } /* end of if acpt[j]<pacpt[j] */
       anyrjct += rjct[j];       // do this for all j -- will be nonzero if any samples were rejected.
     } 
@@ -367,8 +378,8 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
 
   // sigtrial was set to 1/sigma^2 for use in the gaussian rng.
   // Invert it back so that we can resume our incremental updates.
-  for(int i=0;i<ntot;++i)
-    sigtrial[i] = 1.0f/sigtrial[i];
+//   for(int i=0;i<ntot;++i)
+//     sigtrial[i] = 1.0f/sigtrial[i];
   
   return 0;                     // haven't created any return codes
 }
