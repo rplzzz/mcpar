@@ -21,9 +21,10 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   float naccept = 0.0f;
   int stat;
 
+  float *restrict pv = pvals;
   // copy input guesses to our working array
   for(int i=0;i<ntot;++i)
-    pvals[i] = pinit[i];
+    pv[i] = pinit[i];
 
   // get the initial y values
   L(nchain, pvals, lylast);
@@ -371,6 +372,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
         }
 
         cfac[j] /= qimax[j]+FPEPS;
+        //cfac[j] = 1.0f;
       } /* end of if acpt[j]<pacpt[j] */
       anyrjct += rjct[j];       // do this for all j -- will be nonzero if any samples were rejected.
     } 

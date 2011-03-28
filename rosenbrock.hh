@@ -39,7 +39,7 @@ private:
   const int n;                  // number of input variables -- fixed at 2 for testing
   float mu[2], sig2inv[2];
 public:
-  Gaussian(int nc, int muin[]=0, float sig2[]=0) : n(nc) {
+  Gaussian(int nc, const float muin[]=0, const float sig2[]=0) : n(nc) {
     if(nc!=2) throw("Invalid specification.  N for Gaussian must == 2.");
     for(int i=0; i<n; ++i) {
       mu[i]      = muin ? muin[i] : 0.0f;

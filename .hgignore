@@ -1,0 +1,25 @@
+# use glob syntax.
+syntax: glob
+
+# Ignore Fortran object files
+*.o
+
+# Ignore Fortran module files
+*.mod
+
+# compiled python files
+*.pyc
+
+# Ignore the executables
+mcpar-gauss
+
+# Ignore emacs backup files
+*~
+
+# Ignore make dependences
+*.d
+
+# Directory of run results
+runs
+
+
