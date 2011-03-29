@@ -94,12 +94,13 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     // 0.1*cfremote, irrespective of whether we are doing a remote or
     // local update)?
     int remotep;                // was this a remote proposal?
-    if(rndlocal < PLOCAL) {
+    if(rndlocal <= PLOCAL) {     
       genLocal(pvals, ptrial, cfac);
       remotep = 0;
     }
     else {
       genRemote(pvals, musigall, ptrial, cfac);
+      //genRemote(pvals, ptrial, cfac);
       remotep = 1;
     }
     L(nchain, ptrial,lytrial);
@@ -318,7 +319,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
           arg += qiarg[indx];
         }
 
-        float gv = exp(-arg);   // Gaussian value
+        float gv = exp(-0.5*arg);   // Gaussian value
 
         // skip the final assignment, if this chain has already accepted a new
         // set of parameters.
@@ -420,3 +421,43 @@ void MCPar::covar_setup(const float *incov, float *restrict cov)
 }
 
   
+int MCPar::genRemote(const float pvals[], float * restrict ptrial, float * restrict cfac)
+{
+  // pick from one of 4 fixed gaussian distributions
+  const float muvals[8] = {1.0f,0.0f, 0.0f,1.0f, -1.0f,0.0f, 0.0f,-1.0f};
+  // const float muvals[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
+  float unitcov[2] = {1.0f,1.0f};
+
+  int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 0, 4);
+
+  for(int j=0;j<nchain;++j) {
+    int muindx = 2*chnsel[j];
+    
+    VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+                                 ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
+                                muvals+muindx, unitcov) ); 
+    //    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nparam, ptrial+j*nparam, -5.0f, 5.0f));
+  }
+  
+  // calculate cfac
+  // cfac is Q(pvals)/Q(ptrial)
+  for(int j=0; j<nchain; ++j) {
+    int pindx  = nparam*j;
+    float cpv  = 0.0f;
+    float cpt  = 0.0f;
+    
+    for(int muindx=0; muindx<7; muindx += 2) {
+      float arg1 = pvals[pindx]   - muvals[muindx];
+      float arg2 = pvals[pindx+1] - muvals[muindx+1];
+      cpv += exp(-0.5*(arg1*arg1 + arg2*arg2));
+
+      arg1 = ptrial[pindx]   - muvals[muindx];
+      arg2 = ptrial[pindx+1] - muvals[muindx+1];
+      cpt += exp(-0.5*(arg1*arg1 + arg2*arg2));
+    }
+
+    cfac[j] = cpv/cpt;
+    //cfac[j] = 1.0f;
+  }
+  return 0;
+}

@@ -6,8 +6,8 @@ MKLLIBS    = -lmkl_solver_lp64_sequential -Wl,--start-group -lmkl_intel_lp64 -lm
 LIBS = #-lmpi
 
 CXX      = icpc
-#CXXFLAGS = -g -MMD -O0 -I$(MKLINC) -restrict
-CXXFLAGS = -g -MMD -O3 -xT -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
+CXXFLAGS = -g -MMD -O0 -I$(MKLINC) -restrict
+#CXXFLAGS = -g -MMD -O3 -xT -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
 
 OBJS = mcpar.o rosenbrock.o 
 DEPS = $(OBJS:.o=.d)
