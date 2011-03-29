@@ -35,6 +35,8 @@ public:
   int genLocal(const float pvals[], float *restrict ptrial, float *restrict cfac);
   int genRemote(const float pvals[], float *restrict musigall, float *restrict ptrial,
                 float *restrict cfac);
+  // alternate genRemote for testing purposes only:
+  int genRemote(const float pvals[], float * restrict ptrial, float * restrict cfac);
   
 private:
   // parameters defining the problem size, number of parameters, etc. 
