@@ -7,7 +7,7 @@ int main(void)
 {
   const int nparam=2;
   const float gmu[2] = {0.0f,0.0f};
-  const float gsig2[2] = {1.0f, 4.0f};
+  const float gsig2[2] = {1.0f, 2.0f};
   Gaussian L(nparam, gmu, gsig2);
   MCout rslts(nparam);
   //MCPar mcpar(nparam,4);             // 2 parameters, 4 chains
@@ -17,7 +17,7 @@ int main(void)
   //float pinit[8] = {0.0f,0.0f, 1.0f,1.0f, 0.0f,1.0f, 1.0f,0.0f};
   float pinit[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
 
-  mcpar.run(1000000,500, pinit, L, rslts);
+  mcpar.run(10000000,500, pinit, L, rslts);
 
   // output
   for(int i=0; i<rslts.size(); ++i) {
