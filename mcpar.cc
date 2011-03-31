@@ -99,8 +99,8 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       remotep = 0;
     }
     else {
-      genRemote(pvals, musigall, ptrial, cfac);
-      //genRemote(pvals, ptrial, cfac);
+      //genRemote(pvals, musigall, ptrial, cfac);
+      genRemote(pvals, ptrial, cfac);
       remotep = 1;
     }
     L(nchain, ptrial,lytrial);
@@ -255,6 +255,14 @@ int MCPar::genLocal(const float pvals[], float *restrict ptrial, float *restrict
 int MCPar::genRemote(const float pvals[], float * restrict musigall,
                      float * restrict ptrial, float * restrict cfac)
 {
+
+  const float mutest[] = {1.0f,2.0f, 0.0f,2.0f, 0.0f,2.0f, 1.0f,2.0f, -1.0f,2.0f,
+                          0.0f,2.0f, 0.0f,2.0f, -1.0f,2.0f};
+  
+  for(int i=0;i<16;++i)
+    musigall[i] = mutest[i];
+
+  
   // Each mu, sigma set (one pair for each parameter) defines a
   // distribution Q_i.  We want to choose over the distribution
   // max_i(Q_i), and we will do that by choosing from Sum_i(Q_i) and
@@ -290,7 +298,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
 
     for(int j=0; j<nchain; ++j)
       if(rjct[j]) {
-        qimax[j] = 0.0f;
+        qimax[j] = FPEPS;
         qisum[j] = FPEPS;
       }
       else {                    // new params have been accepted for this chain
@@ -339,7 +347,8 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
     anyrjct = 0;
     
     for(int j=0; j<nchain; ++j) {
-      if(acpt[j] < pacpt[j]) {  // accept this chain
+      //if(acpt[j] < pacpt[j]) {  // accept this chain
+      if(1) {
         rjct[j] = 0;            // mark as accepted -- won't get any
                                 // further changes even if we go
                                 // through the loop again
@@ -368,12 +377,13 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
           }
 
           // arg is the sum over all Q_i of (x-mu_i)^2/sig^2
-          float gv = exp(-arg); // Gaussian value for Q_i   // XXX Move me outside the loop!
-          cfac[j] = gv > cfac[j] ? gv : cfac[j];
+          float gv = exp(-0.5*arg); // Gaussian value for Q_i   // XXX Move me outside the loop!
+          //cfac[j] = gv > cfac[j] ? gv : cfac[j];
+          cfac[j] += gv;        // XXX fix when testing complete
         }
 
-        cfac[j] /= qimax[j]+FPEPS;
-        //cfac[j] = 1.0f;
+        //cfac[j] /= qimax[j];  // XXX fix when testing complete.
+        cfac[j] /= qisum[j];
       } /* end of if acpt[j]<pacpt[j] */
       anyrjct += rjct[j];       // do this for all j -- will be nonzero if any samples were rejected.
     } 
@@ -426,17 +436,34 @@ int MCPar::genRemote(const float pvals[], float * restrict ptrial, float * restr
   // pick from one of 4 fixed gaussian distributions
   const float muvals[8] = {1.0f,0.0f, 0.0f,1.0f, -1.0f,0.0f, 0.0f,-1.0f};
   // const float muvals[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
-  float unitcov[2] = {1.0f,1.0f};
+  float unitcov[2] = {2.0f,2.0f};
+  float uc2[2];
+  float fullcov[4] = {0.5f, 0.0f, 0.0f, 0.5f}; 
+  float ucmat[4];
+  const int ndist = 4;
+  const int gaussian = 1;
 
-  int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 0, 4);
+  for(int i=0;i<2;++i)
+    uc2[i] = unitcov[i]*unitcov[i];
+  
+  covar_setup(fullcov,ucmat);
+  
+  int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 0, ndist);
 
   for(int j=0;j<nchain;++j) {
     int muindx = 2*chnsel[j];
-    
-    VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
-                                 ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
-                                muvals+muindx, unitcov) ); 
-    //    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nparam, ptrial+j*nparam, -5.0f, 5.0f));
+
+    if(gaussian) {
+      VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+                                   ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
+                                   muvals+muindx, unitcov) );
+//       VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+//                                    ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_FULL,
+//                                    muvals+muindx, ucmat) );
+    }
+    else {
+      VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nparam, ptrial+j*nparam, -5.0f, 5.0f));
+    }
   }
   
   // calculate cfac
@@ -446,18 +473,21 @@ int MCPar::genRemote(const float pvals[], float * restrict ptrial, float * restr
     float cpv  = 0.0f;
     float cpt  = 0.0f;
     
-    for(int muindx=0; muindx<7; muindx += 2) {
+    for(int dist=0; dist<ndist; ++dist) {
+      int muindx = 2*dist;
       float arg1 = pvals[pindx]   - muvals[muindx];
       float arg2 = pvals[pindx+1] - muvals[muindx+1];
-      cpv += exp(-0.5*(arg1*arg1 + arg2*arg2));
+      cpv += exp(-0.5*(arg1*arg1/uc2[0] + arg2*arg2/uc2[1]));
 
       arg1 = ptrial[pindx]   - muvals[muindx];
       arg2 = ptrial[pindx+1] - muvals[muindx+1];
-      cpt += exp(-0.5*(arg1*arg1 + arg2*arg2));
+      cpt += exp(-0.5*(arg1*arg1/uc2[0] + arg2*arg2/uc2[1])); 
     }
 
-    cfac[j] = cpv/cpt;
-    //cfac[j] = 1.0f;
+    if(gaussian)
+      cfac[j] = cpv/cpt;
+    else
+      cfac[j] = 1.0f;
   }
   return 0;
 }
