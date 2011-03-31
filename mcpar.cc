@@ -99,8 +99,8 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       remotep = 0;
     }
     else {
-      //genRemote(pvals, musigall, ptrial, cfac);
-      genRemote(pvals, ptrial, cfac);
+      genRemote(pvals, musigall, ptrial, cfac);
+      //genRemote(pvals, ptrial, cfac);
       remotep = 1;
     }
     L(nchain, ptrial,lytrial);
@@ -259,8 +259,8 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
   const float mutest[] = {1.0f,2.0f, 0.0f,2.0f, 0.0f,2.0f, 1.0f,2.0f, -1.0f,2.0f,
                           0.0f,2.0f, 0.0f,2.0f, -1.0f,2.0f};
   
-  for(int i=0;i<16;++i)
-    musigall[i] = mutest[i];
+//   for(int i=0;i<16;++i)
+//     musigall[i] = mutest[i];
 
   
   // Each mu, sigma set (one pair for each parameter) defines a
@@ -286,8 +286,8 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
           int tindx = 2*(nparam*chnsel[j] + i); // "total index" 
           int cindx  = j*nparam+i;                // "chain index"
           mutrial[cindx]  = musigall[tindx]; 
-          // recall "sig" is actually sig^2
-          sigtrial[cindx] = musigall[tindx+1];
+          // recall "sig" is actually sig^2 -- have to take sqrt to get Cholesky decomp
+          sigtrial[cindx] = sqrt(musigall[tindx+1]);
         } 
         VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
                                      ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
