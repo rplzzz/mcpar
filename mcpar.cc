@@ -347,8 +347,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
     anyrjct = 0;
     
     for(int j=0; j<nchain; ++j) {
-      //if(acpt[j] < pacpt[j]) {  // accept this chain
-      if(1) {
+      if(acpt[j] < pacpt[j]) {  // accept this chain
         rjct[j] = 0;            // mark as accepted -- won't get any
                                 // further changes even if we go
                                 // through the loop again
@@ -378,21 +377,19 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
 
           // arg is the sum over all Q_i of (x-mu_i)^2/sig^2
           float gv = exp(-0.5*arg); // Gaussian value for Q_i   // XXX Move me outside the loop!
-          //cfac[j] = gv > cfac[j] ? gv : cfac[j];
-          cfac[j] += gv;        // XXX fix when testing complete
+          cfac[j] = gv > cfac[j] ? gv : cfac[j];
         }
 
-        //cfac[j] /= qimax[j];  // XXX fix when testing complete.
-        cfac[j] /= qisum[j];
+        cfac[j] /= qimax[j]; 
       } /* end of if acpt[j]<pacpt[j] */
       anyrjct += rjct[j];       // do this for all j -- will be nonzero if any samples were rejected.
     } 
   } while(anyrjct);             // finish only when no rejects left.
 
-  // sigtrial was set to 1/sigma^2 for use in the gaussian rng.
-  // Invert it back so that we can resume our incremental updates.
-//   for(int i=0;i<ntot;++i)
-//     sigtrial[i] = 1.0f/sigtrial[i];
+  // sigtrial was set to sigma for use in the gaussian rng, but we
+  // want sigma^2 for our incremental updates.
+   for(int i=0;i<ntot;++i)
+     sigtrial[i] *= sigtrial[i];
   
   return 0;                     // haven't created any return codes
 }

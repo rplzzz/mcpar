@@ -10,9 +10,9 @@ int main(void)
   const float gsig2[2] = {1.0f, 2.0f};
   Gaussian L(nparam, gmu, gsig2);
   MCout rslts(nparam);
-  //MCPar mcpar(nparam,4);             // 2 parameters, 4 chains
+  MCPar mcpar(nparam,4);             // 2 parameters, 4 chains
   //MCPar mcpar(2,4,1,0,1.0f);    // 2 param, 4 chain, no MPI, plocal=1.0
-  MCPar mcpar(2,4,1,0,1.0e-9f);    // 2 param, 4 chain, no MPI, plocal=0.0
+  //MCPar mcpar(2,4,1,0,1.0e-9f);    // 2 param, 4 chain, no MPI, plocal=0.0
 
   //float pinit[8] = {0.0f,0.0f, 1.0f,1.0f, 0.0f,1.0f, 1.0f,0.0f};
   float pinit[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
