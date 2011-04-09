@@ -14,8 +14,8 @@ int main(void)
   //MCPar mcpar(2,4,1,0,1.0f);    // 2 param, 4 chain, no MPI, plocal=1.0
   //MCPar mcpar(2,4,1,0,1.0e-9f);    // 2 param, 4 chain, no MPI, plocal=0.0
 
-  //float pinit[8] = {0.0f,0.0f, 1.0f,1.0f, 0.0f,1.0f, 1.0f,0.0f};
-  float pinit[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
+  float pinit[8] = {0.0f,0.0f, 1.0f,1.0f, 0.0f,1.0f, 1.0f,0.0f};
+  //float pinit[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
 
   mcpar.run(10000000,500, pinit, L, rslts);
 

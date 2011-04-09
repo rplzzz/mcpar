@@ -12,6 +12,7 @@ syntax: glob
 
 # Ignore the executables
 mcpar-gauss
+mcpar-dgauss
 
 # Ignore emacs backup files
 *~
