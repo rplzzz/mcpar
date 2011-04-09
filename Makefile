@@ -14,8 +14,10 @@ DEPS = $(OBJS:.o=.d)
 
 include $(DEPS)
 
-all: mcpar-gauss
+all: mcpar-gauss mcpar-dgauss
 
 mcpar-gauss: mcpar-gauss.o $(OBJS)
 	$(CXX) -L$(MKLLIBDIR) -o mcpar-gauss mcpar-gauss.o $(OBJS) $(LIBS) $(MKLLIBS)
 
+mcpar-dgauss: mcpar-dgauss.o $(OBJS)
+	$(CXX) -L$(MKLLIBDIR) -o mcpar-dgauss mcpar-dgauss.o $(OBJS) $(LIBS) $(MKLLIBS)

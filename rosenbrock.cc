@@ -1,3 +1,4 @@
+#include <math.h>
 #include "rosenbrock.hh"
 
 int Rosenbrock1::operator()(int npset, const float *x, float *restrict fx)
@@ -58,3 +59,22 @@ int Gaussian::operator()(int npset, const float *x, float *restrict fx)
   // have to call exp here.
   return 0;
 }
+
+int DualGaussian::operator()(int npset, const float *x, float *restrict fx)
+{
+  const int n=2;                  // two parameters
+
+  for(int j=0;j<npset;++j) {
+    int indx = j*n;
+    float arg1 = 0.5*(x[indx]*x[indx] + x[indx+1]*x[indx+1]);
+    float t2a  = x[indx]-5.0f;
+    float t2b  = x[indx+1]-5.0f;
+    float arg2 = 0.5*(t2a*t2a + t2b*t2b);
+
+    // have to return the log of sum of exponentials
+    fx[j] = log(w*exp(-arg1) + exp(-arg2));
+  }
+  return 0;
+}
+
+  

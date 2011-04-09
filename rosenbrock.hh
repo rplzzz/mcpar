@@ -48,5 +48,17 @@ public:
   }
   int operator()(int npset, const float *x, float *restrict fx);
 };
-  
+
+/* Also not a Rosenbrock function.  Perhaps we should rename this module */
+class DualGaussian : public VLFunc
+{
+  // sum of two gaussians, one at 0,0 and one at 2,2, both with unit
+  // variance.  Relative weighting of the two is adjustable.
+private:
+  const float w;                // weighting of the 0,0 gaussian
+public:
+  DualGaussian(float win) : w(win) {}
+  int operator()(int npset, const float *x, float *restrict fx);
+};
+
 #endif
