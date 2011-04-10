@@ -1,4 +1,5 @@
 #include <iostream>
+#include "mpi.h"
 #include "mkl.h"
 #include "mkl_vsl.h"
 #include "mcpar.hh"
@@ -84,6 +85,16 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   // local proposal or a remote one and apply it to all of the
   // chains in this process.
   for(int isamp=0; isamp<nsamp; ++isamp) {
+    if(isamp%SYNCSTEP == 0 && mpi) {
+      int ngather = 2*ntot;
+      int mpistat = MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
+                                  musigall, ngather, MPI_FLOAT, MPI_COMM_WORLD);
+      if(mpistat != MPI_SUCCESS) {
+        std::cerr << "Error in MPI_Allgather.  Aborting.\n";
+        MPI_Abort(MPI_COMM_WORLD, mpistat);
+      }
+    }
+      
     float rndlocal;            // random draw to see if we do local or remote proposal
     if(isamp<SYNCSTEP)
       rndlocal = 0.0f;        // no data for remote proposal yet.

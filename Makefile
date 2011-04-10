@@ -5,7 +5,7 @@ MKLLIBDIR  = $(MKLROOT)/lib/em64t
 MKLLIBS    = -lmkl_solver_lp64_sequential -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -Wl,--end-group -lpthread
 LIBS = #-lmpi
 
-CXX      = icpc
+CXX      = mpicxx
 CXXFLAGS = -g -MMD -O0 -I$(MKLINC) -restrict
 #CXXFLAGS = -g -MMD -O3 -xT -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
 
@@ -21,3 +21,6 @@ mcpar-gauss: mcpar-gauss.o $(OBJS)
 
 mcpar-dgauss: mcpar-dgauss.o $(OBJS)
 	$(CXX) -L$(MKLLIBDIR) -o mcpar-dgauss mcpar-dgauss.o $(OBJS) $(LIBS) $(MKLLIBS)
+
+mcpar-dgauss-mpi: mcpar-dgauss-mpi.o $(OBJS)
+	$(CXX) -L$(MKLLIBDIR) -o $@ $^ $(LIBS) $(MKLLIBS)
