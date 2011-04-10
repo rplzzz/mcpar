@@ -13,6 +13,8 @@ syntax: glob
 # Ignore the executables
 mcpar-gauss
 mcpar-dgauss
+mcpar-dgauss-mpi
+
 
 # Ignore emacs backup files
 *~
