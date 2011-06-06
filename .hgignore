@@ -14,7 +14,7 @@ syntax: glob
 mcpar-gauss
 mcpar-dgauss
 mcpar-dgauss-mpi
-
+*.exe
 
 # Ignore emacs backup files
 *~
