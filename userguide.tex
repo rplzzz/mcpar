@@ -1,0 +1,152 @@
+\documentclass[11pt]{article}
+\title{Using the MCPar Markov Chain Monte Carlo Driver}
+\author{Robert Link}
+
+\begin{document}
+\maketitle
+
+\section{The {MCPar} class}
+\label{sec:mcpar}
+
+The Parallel Markov Chain Monte Carlo (pMCMC) driver is implemented in
+the \texttt{MCPar} class.  This class sets up and initializes some
+record-keeping data structures, and it provides a function to run a
+Monte Carlo experiment.  Results are returned in an auxiliary class
+called \texttt{MCOut}, which is described later in this section.  The
+user must supply a class to compute the likelihood function for the
+problem being investigated.  The requirements for this class are
+described in a section~\ref{sec:vlfunc}.
+
+The user interface to the driver comprises two functions: the class
+constructor and the \texttt{run} method.  The constructor has only one
+mandatory argument and three commonly used arguments.  The remaining
+arguments fine-tune the details of the pMCMC algorithm; they can
+usually be left at their default values.  The four commonly used
+arguments are:
+\begin{description}
+\item[int np] The number of parameters in the problem, \emph{i.e.,} the
+  number of arguments to the likelihood function.  (Mandatory, no
+  default)
+\item[int nc] The number of independent Markov chains to be run in each
+  process.  If your likelihood function is vectorized, this should be
+  a small multiple of 4.  Otherwise, 1 is sufficient. (Optional,
+  default = 1)
+\item[int mpisiz] The number of MPI processes in the calculation.  This
+  should be the same as the number of processors (including virtual
+  processors provided by hyperthreading, if any) you have
+  requested. (Optional, default = 1)
+\item[int mpirank] The rank of this process in the \verb=MPI_COMM_WORLD=
+  communicator.  You get this from the \verb=MPI_Comm_rank= function.
+\end{description}
+
+The \texttt{MCPar} class does not set up the MPI runtime, so the
+calling code must do this before creating an \texttt{MCPar} instance.
+The boilerplate for doing this is:
+\begin{verbatim}
+  // Set up MPI
+  int mpistat = MPI_Init(&argc, &argv);
+  if(mpistat != MPI_SUCCESS) {
+    std::cerr << "Error on MPI_Init.  Exiting.\n";
+    return mpistat;
+  }
+  int size,rank;
+  MPI_Comm_size(MPI_COMM_WORLD,&size);
+  MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+\end{verbatim}
+The \texttt{size} and \texttt{rank} variables would then be passed as
+the \texttt{mpisiz} and \texttt{mpirank} arguments to the constructor.
+When $\mbox{\texttt{mpisiz}} = 1$ the MPI communication functions in
+the driver are skipped.  Therefore, if only a single process is
+desired, it is safe to skip the MPI setup altogether.
+
+The \texttt{run} method launches a parallel MCMC calculation.  It has
+seven arguments, all but the last of which are mandatory.
+\begin{description}
+\item[int nsamp] The number of monte carlo samples to generate.
+\item[int nburn] The number of ``burn-in'' iterations to perform (see
+  comments below).
+\item[const float *pinit] Array of initial guesses for parameters.
+  The length of the array is np*nc; \emph{i.e.,} the parameter list is
+  duplicated for each chain in the process.
+\item[VLFunc \&L] The likelihood function (\S~\ref{sec:vlfunc}).
+\item[MCout \&outsamples] The output MCMC samples (described below).
+\item[float *incov] Covariance matrix for the sampling.  A diagonal
+  matrix adjusts the scale of the sampling on a per-parameter basis.
+  Off-diagonal terms introduce covariance.  Matching this matrix to
+  the properties of the parameters (insofar as they are known) will
+  help the MCMC converge faster.  This matrix must be symmetric and
+  positive-definite. (Optional.  Default = \texttt{NULL}, which
+  results in the Identity Matrix being used in the calculation).
+\end{description}
+
+The number of samples, \texttt{nsamp} is the number of samples
+\emph{per Markov chain}. Thus, the total number of samples collected
+will be $\text{nsamp} \times \text{nc} \times \text{mpisiz}$.
+
+The calculation begins with a ``burn-in'' phase, during which each
+chain is run independently (\emph{i.e.,} no exchange of data between
+chains) and no samples are saved.  The burn-in serves to eliminate
+distortions caused by the initial guesses corresponding to extremely
+low-probability states.  Because each chain must find its way to a
+high-probability state independently, each chain must burn-in
+independently.  That is, the required burn-in period does not get
+shorter when you have more parallel chains; each chain must go through
+the full burn-in that would be required for a single chain.  How to
+choose the length of the burn-in for a Monte Carlo calculation is a
+controversial subject.  The authors of the mcmc package for the R
+programming language even recommend no burn-in at all, provided that
+the starting point is one ``you wouldn't mind having in a sample.''
+So long as the rule of doing a full-length burn-in for every chain is
+respected, any such prescription should work as well for pMCMC as it
+would for a serial MCMC.
+
+Output samples are returned in the \texttt{MCout} structure supplied
+to the function.  The \texttt{MCout} constructor requires a single
+argument:  the number of parameters in the model being tested.  The
+following methods are supported:
+\begin{description}
+\item[int nparam(void)] The number of parameters supplied to the
+  constructor.
+\item[int size(void)] The number of samples in the list.  Each sample
+  is a vector of values, one for each parameter in the model.
+\item[const float *getpset(int i) const] Return the $i$th sample of
+  parameter values.
+\end{description}
+
+\section{The likelihood function}
+\ref{sec:vlfunc}
+The details of the model being examined are contained in the argument
+\texttt{L} to the run method.  This object must be from a subclass of
+the \texttt{VLFunc} class.  The only method subclasses of
+\texttt{VLFunc} are required to provide is
+\verb=int operator()(int npset, const float *x, float *restrict fx)=.
+Additionally, the subclass should arrange to keep track of the number
+of parameters in the model, since this information is not included in
+the arguments to the paren operator.  The arguments to the paren
+operator are:
+\begin{description}
+\item[int npset] The number of parameter sets; \emph{i.e.,} the number
+  of Markov chains running concurrently.
+\item[const float *x] The parameter values to be evaluated.  The
+  length of this vector will be $\text{npset} \times \text{np}$, where
+  np is the number of parameters.
+\item[float *fx]\footnote{The \texttt{restrict} keyword promises the
+  compiler that the data in fx does not overlap with any other arrays
+  in scope inside the function.}  The output vector.  The length is npset.
+\end{description}
+
+The operator calculates the \emph{log} of the likelihood function for
+the sets of parameters passed in.  We calculate $\log(L)$ for all of
+the parameter sets at once in order to allow for the possibility that
+the computation of $\log(L)$ might be vectorized, requiring the
+relevant loops to be performed inside, rather than outside the
+function call.
+
+The return value for the likelihood function allows for returning error codes.
+At present, the \texttt{run()} method does not check for error codes,
+so nothing much is gained by returning them; however, the capability
+is reserved for future use.  
+
+\section{Getting and building {pMCMC}}
+
+\end{document}

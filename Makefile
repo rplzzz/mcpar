@@ -24,3 +24,6 @@ mcpar-dgauss: mcpar-dgauss.o $(OBJS)
 
 mcpar-dgauss-mpi: mcpar-dgauss-mpi.o $(OBJS)
 	$(CXX) -L$(MKLLIBDIR) -o $@ $^ $(LIBS) $(MKLLIBS)
+
+%.exe: %.o $(OBJS)
+	$(CXX) -L$(MKLLIBDIR) -o $@ $^ $(LIBS) $(MKLLIBS)
