@@ -149,4 +149,39 @@ is reserved for future use.
 
 \section{Getting and building {pMCMC}}
 
+The pMCMC code is available on Evergreen in the /homes/rpl/mcpar
+directory.  The directory is a Mercurial archive, so it is best to
+copy it using the \texttt{hg clone} command.  This will create a copy
+of archive as of its latest check-in.  Copies created this way are
+automatically branched, so you can make changes and check-ins as
+necessary and still merge to or from the other line of development.
+
+The code draws on the Intel Math Kernel Library, so you will need to
+include the Intel cluster tools in your environment in order to
+build.  You can do this by running the command \texttt{tap intel400}
+at the command prompt.
+
+There is a Makefile for building the code, as well as several example
+programs using simple models like Gaussians and Rosenbrock functions.
+The first few examples have explicit targets in the Makefile; after
+that I went to a pattern rule.  Any make target ending in
+\texttt{.exe} will assume there is a corresponding main source file
+with the same base name.  Thus, \texttt{make mcpar-rosen1-mpi.exe}
+will build the single-component Rosenbrock example.  There are also
+some example batch scripts for submitting the MPI jobs.
+
+\section{Bugs and limitations}
+
+\begin{itemize}
+\item Most of the vectorization in the driver isn't working yet.  
+\item Not much in the way of error handling and recovery.
+\item There is some left-over debugging code that needs to be cleaned
+  out.
+\item Due to limitations in the MKL implementation of the MT2203
+  random number generator, no more than 1024 processes may be run
+  (the limitation applies only to processes, not to multiple chains
+  per process).
+\end{itemize}
+
+
 \end{document}
