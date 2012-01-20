@@ -1,4 +1,5 @@
 \documentclass[11pt]{article}
+\usepackage{amsmath}
 \title{Using the MCPar Markov Chain Monte Carlo Driver}
 \author{Robert Link}
 
@@ -114,7 +115,7 @@ following methods are supported:
 \end{description}
 
 \section{The likelihood function}
-\ref{sec:vlfunc}
+\label{sec:vlfunc}
 The details of the model being examined are contained in the argument
 \texttt{L} to the run method.  This object must be from a subclass of
 the \texttt{VLFunc} class.  The only method subclasses of

@@ -1,7 +1,11 @@
-#include <iostream>
-#include "mpi.h"
-#include "mkl.h"
-#include "mkl_vsl.h"
+#include <mpi.h>
+#include <mkl.h>
+#include <mkl_vsl.h>
+#include <iostream> 
+#include <exception>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
 #include "mcpar.hh"
 #include "vlfunc.hh"
 #include "mcout.hh"
@@ -12,10 +16,26 @@ const float MCPar::FPEPS = 1.0e-14;
 int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsamples,
                float * incov)
 {
+  const int LOGSTEP = 1000;
+  
   covar_setup(incov, cov);
+
+  // set up a log file
+  std::stringstream logname;
+  logname << "mcpar-log." << std::setfill('0') << std::setw(3) << rank << ".txt";
+  std::ofstream logfile(logname.str().c_str());
   
   // pre-allocate space for the samples
-  outsamples.newsamps(nsamp*nchain); 
+  try {
+    outsamples.newsamps(nsamp*nchain);
+  }
+  catch(std::bad_alloc &) {
+    logfile << "Unable to allocate space for output samples.  Exiting.\n";
+    if(mpi)
+      MPI_Abort(MPI_COMM_WORLD,2);
+    else
+      exit(2);
+  }
   
   // here are the things we will need to do the monte carlo
   float ntrial  = 0.0f;
@@ -31,6 +51,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   L(nchain, pvals, lylast);
   
   // first step - burn in.  Run the MC, but don't perform any remote updates
+  logfile << "Starting burn-in.  Samples = " << nburn << "\n";
   int irate = 10;               // XXX reset to 50 when testing complete
   for(int isamp = 0; isamp<nburn; ++isamp) {
     genLocal(pvals, ptrial, cfac);
@@ -84,13 +105,21 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   // the calc well-vectorized, we do one check for whether to take a
   // local proposal or a remote one and apply it to all of the
   // chains in this process.
+  logfile << "Starting main sample loop:  nsamp = " << nsamp << "\n";
   for(int isamp=0; isamp<nsamp; ++isamp) {
+    if(isamp%LOGSTEP == 0) {
+      logfile << "sample step " << isamp << ":\toutsamples size= " << outsamples.size()
+              << "  maxsize = " << outsamples.maxsize() << "  nparam= " << outsamples.nparam()
+              << "\n\tvsize = " << outsamples.vsize() << "  offset = "
+              << (isamp*outsamples.nparam()) << std::endl;
+    }
     if(isamp%SYNCSTEP == 0 && mpi) {
       int ngather = 2*ntot;
       int mpistat = MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
                                   musigall, ngather, MPI_FLOAT, MPI_COMM_WORLD);
       if(mpistat != MPI_SUCCESS) {
         std::cerr << "Error in MPI_Allgather.  Aborting.\n";
+        logfile << "Error in MPI_Allgather.  Aborting.\n" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, mpistat);
       }
     }
@@ -162,11 +191,6 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       musigall[islot]   = mu[i];
       musigall[islot+1] = sig[i];
     }                                    /* end of loop over all params */
-
-    // sync with MPI peers, if any
-    if(mpi && (isamp % SYNCSTEP == 0)) {
-      // do MPI_Allgather:  not yet implemented 
-    } 
   }                                      /* end of loop over samples */
   return 0;
 }
