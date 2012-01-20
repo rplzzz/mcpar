@@ -1,8 +1,8 @@
+#include "mpi.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
-#include "mpi.h"
 #include "mcpar.hh"
 #include "rosenbrock.hh"
 #include "mcout.hh"
@@ -14,6 +14,7 @@ int main(int argc, char *argv[])
   const float gsig2[2] = {1.0f, 2.0f};
   Rosenbrock1 L(2);
   MCout rslts(nparam);
+  int nsamp = 100000;
 
   // Set up MPI
   int mpistat = MPI_Init(&argc, &argv);
@@ -26,13 +27,19 @@ int main(int argc, char *argv[])
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
 
+  if(argc > 1)
+    nsamp = atoi(argv[1]);
+  if(rank==0)
+    std::cout << "nsamp = " << nsamp << "\n";
+  
+  
   // Set up the Parallel MC
   // 2 parameters, 4 chains per MPI process
   MCPar mcpar(nparam,4,size,rank);        
 
   float pinit[8] = {0.0f,0.0f, 2.0f,2.0f, 0.0f,1.5f, 0.0f,-2.0f};
 
-  mcpar.run(100000,500, pinit, L, rslts);
+  mcpar.run(nsamp ,500, pinit, L, rslts);
 
   // output
   std::stringstream ofname;
