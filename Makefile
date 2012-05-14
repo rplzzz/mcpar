@@ -9,7 +9,7 @@ CXX      = mpiicpc
 #CXXFLAGS = -g -MMD -O0 -I$(MKLINC) -restrict
 CXXFLAGS = -g -MMD -O3 -xT -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
 
-OBJS = mcpar.o rosenbrock.o mcout.o
+OBJS = mcpar.o rosenbrock.o mcout.o mcutil.o
 DEPS = $(OBJS:.o=.d)
 
 include $(DEPS)
