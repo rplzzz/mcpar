@@ -39,6 +39,7 @@ public:
   int vsize(void) const {return pvals.size();}
   const float *getpset(int i) const {return &pvals[i*nparam_];}
   void output(std::ostream &outfile, int mpisize=1, int mpirank=0) const;
+  float * collect(int mpisize, int mpirank, size_t *ntot) const;
 };
 
 
