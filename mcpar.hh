@@ -23,6 +23,10 @@ public:
 
   static const float FPEPS;     // small number for preventing divide by zero and the like
 
+  // logging switches.  Users may set and reset these as desired
+  bool logging;
+  int logstep;
+
   //! Constructor
   MCPar(int np, int nc=1, int mpisiz=1, int mpirank=0, float pl=0.9,
         float armin=0.2, float armax=0.5, float dfac=0.2, float ifac=1.5, int sync=10);

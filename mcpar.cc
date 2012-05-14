@@ -16,8 +16,6 @@ const float MCPar::FPEPS = 1.0e-14;
 int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsamples,
                float * incov)
 {
-  const int LOGSTEP = 1000;
-  
   covar_setup(incov, cov);
 
   // set up a log file
@@ -51,7 +49,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   L(nchain, pvals, lylast);
   
   // first step - burn in.  Run the MC, but don't perform any remote updates
-  logfile << "Starting burn-in.  Samples = " << nburn << "\n";
+  logfile << "Starting burn-in.  Samples = " << nburn << std::endl;
   int irate = 10;               // XXX reset to 50 when testing complete
   for(int isamp = 0; isamp<nburn; ++isamp) {
     genLocal(pvals, ptrial, cfac);
@@ -105,9 +103,9 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   // the calc well-vectorized, we do one check for whether to take a
   // local proposal or a remote one and apply it to all of the
   // chains in this process.
-  logfile << "Starting main sample loop:  nsamp = " << nsamp << "\n";
+  logfile << "Starting main sample loop:  nsamp = " << nsamp << std::endl;
   for(int isamp=0; isamp<nsamp; ++isamp) {
-    if(isamp%LOGSTEP == 0) {
+    if(logging && isamp%logstep == 0) {
       logfile << "sample step " << isamp << ":\toutsamples size= " << outsamples.size()
               << "  maxsize = " << outsamples.maxsize() << "  nparam= " << outsamples.nparam()
               << "\n\tvsize = " << outsamples.vsize() << "  offset = "
@@ -115,6 +113,8 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     }
     if(isamp%SYNCSTEP == 0 && mpi) {
       int ngather = 2*ntot;
+      if(logging)
+        logfile << "\tisamp = " << isamp << "  entering allgather " << std::endl;
       int mpistat = MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
                                   musigall, ngather, MPI_FLOAT, MPI_COMM_WORLD);
       if(mpistat != MPI_SUCCESS) {
@@ -122,6 +122,8 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
         logfile << "Error in MPI_Allgather.  Aborting.\n" << std::endl;
         MPI_Abort(MPI_COMM_WORLD, mpistat);
       }
+      if(logging)
+        logfile << "\tisamp = " << isamp << "  exiting allgather " << std::endl;
     }
       
     float rndlocal;            // random draw to see if we do local or remote proposal
@@ -199,7 +201,7 @@ MCPar::MCPar(int np, int nc, int mpisiz, int mpirank, float pl,
              float armin, float armax, float dfac, float ifac, int sync) :
   nparam(np), nchain(nc), size(mpisiz), rank(mpirank), PLOCAL(pl),
   TGT_ARATE_MIN(armin), TGT_ARATE_MAX(armax),
-  SCALE_DEC(dfac), SCALE_INC(ifac), SYNCSTEP(sync)
+  SCALE_DEC(dfac), SCALE_INC(ifac), SYNCSTEP(sync), logging(false), logstep(1000)
 {
   ntot = np*nc;
   ncov = np*np;
