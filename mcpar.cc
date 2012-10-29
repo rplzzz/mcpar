@@ -20,7 +20,10 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
 
   // set up a log file
   std::stringstream logname;
-  logname << "mcpar-log." << std::setfill('0') << std::setw(3) << rank << ".txt";
+  if(rank==0)
+      logname << "mcpar-log." << std::setfill('0') << std::setw(3) << rank << ".txt";
+  else
+      logname << "/dev/null";
   std::ofstream logfile(logname.str().c_str());
   
   // pre-allocate space for the samples
