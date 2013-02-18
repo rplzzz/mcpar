@@ -1,13 +1,16 @@
 
 MKLBASE    = /cell_root/software/intel/mkl/10.0.2.018
 MKLINC     = $(MKLROOT)/include
-MKLLIBDIR  = $(MKLROOT)/lib/em64t
-MKLLIBS    = -lmkl_solver_lp64_sequential -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -Wl,--end-group -lpthread
+MKLLIBDIR  = $(MKLROOT)/lib/intel64
+#MKLLIBS    = -lmkl_solver_lp64_sequential -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -Wl,--end-group -lpthread
+MKLLIBS    = -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -Wl,--end-group -lpthread
 LIBS = #-lmpi
 
-CXX      = mpiicpc
-#CXX	  = mpicxx
-#CXXFLAGS = -g -MMD -O0 -I$(MKLINC) -restrict
+#CXX      = mpiicpc
+CXX	  = mpicxx
+### g++ flags:
+#CXXFLAGS = -g -MMD -O -I$(MKLINC) -Drestrict=__restrict__
+### icpc flags:
 CXXFLAGS = -g -MMD -O3 -axSSE3 -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
 
 OBJS = mcpar.o rosenbrock.o mcout.o mcutil.o
@@ -17,7 +20,7 @@ include $(DEPS)
 
 lib: libmcpar.a
 
-all: mcpar-gauss mcpar-dgauss
+all: mcpar-gauss mcpar-dgauss mcpar-rosen1-mpi.exe
 
 libmcpar.a: $(OBJS)
 	ar -ru libmcpar.a $(OBJS)

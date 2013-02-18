@@ -33,7 +33,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   catch(std::bad_alloc &) {
     logfile << "Unable to allocate space for output samples.  Exiting.\n";
     if(mpi)
-      MPI_Abort(MPI_COMM_WORLD,2);
+      MPI_Abort(mcparComm,2);
     else
       exit(2);
   }
@@ -119,11 +119,11 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       if(logging)
         logfile << "\tisamp = " << isamp << "  entering allgather " << std::endl;
       int mpistat = MPI_Allgather(MPI_IN_PLACE, 0, MPI_DATATYPE_NULL,
-                                  musigall, ngather, MPI_FLOAT, MPI_COMM_WORLD);
+                                  musigall, ngather, MPI_FLOAT, mcparComm);
       if(mpistat != MPI_SUCCESS) {
         std::cerr << "Error in MPI_Allgather.  Aborting.\n";
         logfile << "Error in MPI_Allgather.  Aborting.\n" << std::endl;
-        MPI_Abort(MPI_COMM_WORLD, mpistat);
+        MPI_Abort(mcparComm, mpistat);
       }
       if(logging)
         logfile << "\tisamp = " << isamp << "  exiting allgather " << std::endl;
@@ -211,7 +211,14 @@ MCPar::MCPar(int np, int nc, int mpisiz, int mpirank, float pl,
 
   tchains = mpisiz*nchain;
   mpi   = mpisiz>1;             // if mpisiz<=1, assume we're not running with MPI
-
+  if(mpi) {
+    int stat = MPI_Comm_dup(MPI_COMM_WORLD,&mcparComm);
+    if( stat != MPI_SUCCESS) {
+      std::cerr << "rank = " << rank << ":  Unable to create mcpar communicator (fatal)\n";
+      MPI_Abort(MPI_COMM_WORLD, 3);
+    }
+  }
+  
   // allocate arrays
   pvals   = new float[ntot];
   ptrial  = new float[ntot];

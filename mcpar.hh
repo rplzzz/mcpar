@@ -1,6 +1,7 @@
 #ifndef MCPAR_HH_
 #define MCPAR_HH_
 
+#include "mpi.h"
 #include "mkl.h"
 #include "vlfunc.hh"
 #include "mcout.hh"
@@ -41,8 +42,10 @@ public:
                 float *restrict cfac);
   // alternate genRemote for testing purposes only:
   int genRemote(const float pvals[], float * restrict ptrial, float * restrict cfac);
-  
+
 private:
+  // communicator for use in the mcpar library
+  MPI_Comm mcparComm;
   // parameters defining the problem size, number of parameters, etc. 
   int nparam;                   //<! number of parameters
   int nchain;                   //<! number of chains to run in parallel
