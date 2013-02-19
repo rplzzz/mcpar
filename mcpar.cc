@@ -10,6 +10,7 @@
 #include "vlfunc.hh"
 #include "mcout.hh"
 #include <math.h>
+#include <unistd.h>
 
 const float MCPar::FPEPS = 1.0e-14;
 
@@ -106,8 +107,17 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   // the calc well-vectorized, we do one check for whether to take a
   // local proposal or a remote one and apply it to all of the
   // chains in this process.
+  int outstep = nsamp > 50 ? nsamp/10 : 5; // number of steps between output dumps
   logfile << "Starting main sample loop:  nsamp = " << nsamp << std::endl;
   for(int isamp=0; isamp<nsamp; ++isamp) {
+    // output if it's time to do so
+    if(isamp % outstep == 0 && isamp > 0) {
+      //std::cout << "dumping output at isamp= " << isamp << std::endl;
+      outsamples.output();
+      //std::cout << "done" << std::endl;
+      //sleep(5);
+    }
+    
     if(logging && isamp%logstep == 0) {
       logfile << "sample step " << isamp << ":\toutsamples size= " << outsamples.size()
               << "  maxsize = " << outsamples.maxsize() << "  nparam= " << outsamples.nparam()
@@ -197,6 +207,8 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       musigall[islot+1] = sig[i];
     }                                    /* end of loop over all params */
   }                                      /* end of loop over samples */
+  
+  outsamples.output();                   // output remaining samples
   return 0;
 }
 
