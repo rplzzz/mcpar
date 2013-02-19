@@ -13,7 +13,6 @@ int main(int argc, char *argv[])
   const float gmu[2] = {0.0f,0.0f};
   const float gsig2[2] = {1.0f, 2.0f};
   DualGaussian L(5.0f);
-  MCout rslts(nparam);
 
   // Set up MPI
   int mpistat = MPI_Init(&argc, &argv);
@@ -25,6 +24,7 @@ int main(int argc, char *argv[])
   MPI_Comm_size(MPI_COMM_WORLD,&size);
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
+  MCout rslts(nparam, &std::cout, MPI_COMM_WORLD); 
 
   // Set up the Parallel MC
   // 2 parameters, 4 chains per MPI process
@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 
   float pinit[8] = {0.0f,0.0f, 2.0f,2.0f, 0.0f,1.5f, 0.0f,-2.0f};
 
-  mcpar.run(100000,500, pinit, L, rslts);
+  mcpar.run(8000,500, pinit, L, rslts);
 
   // output
   std::stringstream ofname;
