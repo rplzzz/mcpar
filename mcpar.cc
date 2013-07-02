@@ -177,7 +177,9 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     // Add the new samples to the list
     for(int j=0; j<nchain; ++j) {
       int idx = j*nparam;
-      outsamples.add(pvals+idx);
+      float y;
+      L(1,pvals+idx,&y);
+      outsamples.add(pvals+idx,lylast[j]);
     } 
 
     // Update the running estimates of mean and variance for each

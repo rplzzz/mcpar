@@ -11,7 +11,7 @@ CXX	  = mpicxx
 ### g++ flags:
 #CXXFLAGS = -g -MMD -O -I$(MKLINC) -Drestrict=__restrict__
 ### icpc flags:
-CXXFLAGS = -g -MMD -O3 -axSSE3 -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
+CXXFLAGS = -g -MMD -O0 -axSSE3 -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
 
 OBJS = mcpar.o rosenbrock.o mcout.o mcutil.o
 DEPS = $(OBJS:.o=.d)
