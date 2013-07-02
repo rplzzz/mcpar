@@ -1,4 +1,5 @@
 #include <mpi.h>
+#include <limits>
 #include "mcout.hh"
 
 MCout::MCout(int np, std::ostream *aoutstream, MPI_Comm acomm) : nparam_(np), next(0),npset(0), maxsamps(0), nextout(0)
@@ -11,6 +12,9 @@ MCout::MCout(int np, std::ostream *aoutstream, MPI_Comm acomm) : nparam_(np), ne
   MPI_Comm_rank(mComm, &mrank);
   MPI_Comm_size(mComm, &msize);
 
+  maxlparams.resize(nparam_);
+  maxlval = -(std::numeric_limits<float>::infinity());
+  
   // for now, do all output through the rank-zero process.  Should really change this to use a parallel output scheme
   if(mrank == 0)
     outstream = aoutstream;
@@ -83,4 +87,54 @@ float * MCout::collect(size_t *ntot)
   }
   nextout = next;
   return buf;
+}
+
+const std::vector<float> &MCout::maxlike(float *lmax)
+{
+  struct {
+    float val;
+    int rank;
+  } sendata,rcvdata;
+  int root;
+  
+  sendata.val = maxlval;
+  sendata.rank = mrank;
+
+  int stat = MPI_Allreduce(&sendata, &rcvdata, 1, MPI_FLOAT_INT, MPI_MAXLOC, mComm);
+
+  if(stat != MPI_SUCCESS) {
+    // MPI failure can't be good.  Best just to bail
+    std::cerr << "rank " << mrank << ":  MPI failure in MCout::maxlike().\n";
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  root = rcvdata.rank;
+  stat = MPI_Bcast(&maxlparams[0], nparam_, MPI_FLOAT, root, mComm);
+
+  if(stat != MPI_SUCCESS) {
+    // MPI failure can't be good.  Best just to bail
+    std::cerr << "rank " << mrank << ":  MPI failure in MCout::maxlike().\n";
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+
+  *lmax = maxlval = rcvdata.val;
+
+  return maxlparams;
+}
+
+void MCout::add(const float *pv, float lval)
+{
+  float *strt = &pvals[next];
+  for(int i=0; i<nparam_; ++i) {
+    assert(strt+i < &pvals[0]+pvals.size());
+    strt[i] = pv[i];
+  }
+  next += nparam_;
+  npset++;
+  
+  if(lval > maxlval) {
+    maxlval = lval;
+    for(int i=0; i<nparam_; ++i)
+      maxlparams[i] = pv[i];
+  }
 }

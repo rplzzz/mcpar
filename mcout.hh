@@ -13,6 +13,8 @@
 class MCout
 {
   std::vector<float> pvals;
+  std::vector<float> maxlparams;
+  float maxlval;
   const int nparam_;
   int next;
   int npset;                     // number of parameter sets stored
@@ -32,15 +34,7 @@ public:
     int newsize = pvals.size() + nsamp*nparam_;
     pvals.resize(newsize);
   }
-  void add(const float *pv) {
-    float *strt = &pvals[next];
-    for(int i=0; i<nparam_; ++i) {
-      assert(strt+i < &pvals[0]+pvals.size());
-      strt[i] = pv[i];
-    }
-    next += nparam_;
-    npset++;
-  }
+  void add(const float *pv, float lval);
   int size(void) const {return npset;}
   int maxsize(void) const {return maxsamps;}
   int nparam(void) {return nparam_;}
@@ -49,6 +43,9 @@ public:
   void output();
   float * collect(size_t *ntot);
   void rewind(void) {nextout = 0;}
+  // Warning: maxlike is a COLLECTIVE call.  All processes in the
+  // group must call it at the same time.
+  const std::vector<float> &maxlike(float *lmax);
 };
 
 

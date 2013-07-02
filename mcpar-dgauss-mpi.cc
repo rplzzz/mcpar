@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 
   float pinit[8] = {0.0f,0.0f, 2.0f,2.0f, 0.0f,1.5f, 0.0f,-2.0f};
 
-  mcpar.run(8000,500, pinit, L, rslts);
+  mcpar.run(8,500, pinit, L, rslts);
 
   // output
   std::stringstream ofname;
@@ -46,6 +46,14 @@ int main(int argc, char *argv[])
     outfile << "\n";
   }
 
+  float lmax;
+  const std::vector<float> &pmax = rslts.maxlike(&lmax);
+
+  std::cout << "max likelihood value: " << lmax << "\n";
+  for(int i=0; i<pmax.size(); ++i)
+    std::cout << pmax[i] << "  ";
+  std::cout << "\n";
+  
   MPI_Finalize();
   
   return 0;
