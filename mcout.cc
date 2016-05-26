@@ -2,7 +2,11 @@
 #include <limits>
 #include "mcout.hh"
 
-MCout::MCout(int np, std::ostream *aoutstream, MPI_Comm acomm) : nparam_(np), next(0),npset(0), maxsamps(0), nextout(0)
+/* NB: the first argument is the number of parameters in the model.
+ * The constructor adjusts it to get the number of columns in the
+ * output set. */
+MCout::MCout(int anparam, std::ostream *aoutstream, MPI_Comm acomm) :
+    mnparam(anparam), mncol(anparam+1), next(0),npset(0), maxsamps(0), nextout(0)
 {
   int stat = MPI_Comm_dup(acomm, &mComm);
   if(stat != MPI_SUCCESS) {
@@ -12,7 +16,7 @@ MCout::MCout(int np, std::ostream *aoutstream, MPI_Comm acomm) : nparam_(np), ne
   MPI_Comm_rank(mComm, &mrank);
   MPI_Comm_size(mComm, &msize);
 
-  maxlparams.resize(nparam_);
+  maxlparams.resize(mnparam);
   maxlval = -(std::numeric_limits<float>::infinity());
   
   // for now, do all output through the rank-zero process.  Should really change this to use a parallel output scheme
@@ -32,10 +36,10 @@ void MCout::output()
   float *buf = collect(&ntot); 
   if(mrank == 0 && ntot>0) {
 
-    int npset = ntot / nparam_;
+    int npset = ntot / mncol;
     int indx = 0;
     for(int i=0; i<npset; ++i) {
-      for(int j=0; j<nparam_; ++j)
+      for(int j=0; j<mncol; ++j)
         (*outstream) << buf[indx++] << "  ";
       (*outstream) << "\n";
     }
@@ -109,7 +113,7 @@ const std::vector<float> &MCout::maxlike(float *lmax)
   }
 
   root = rcvdata.rank;
-  stat = MPI_Bcast(&maxlparams[0], nparam_, MPI_FLOAT, root, mComm);
+  stat = MPI_Bcast(&maxlparams[0], mnparam, MPI_FLOAT, root, mComm);
 
   if(stat != MPI_SUCCESS) {
     // MPI failure can't be good.  Best just to bail
@@ -125,16 +129,17 @@ const std::vector<float> &MCout::maxlike(float *lmax)
 void MCout::add(const float *pv, float lval)
 {
   float *strt = &pvals[next];
-  for(int i=0; i<nparam_; ++i) {
+  for(int i=0; i<mnparam; ++i) {
     assert(strt+i < &pvals[0]+pvals.size());
     strt[i] = pv[i];
   }
-  next += nparam_;
+  strt[mnparam] = lval;         // add the l-value in the last column
+  next += mncol;
   npset++;
   
   if(lval > maxlval) {
     maxlval = lval;
-    for(int i=0; i<nparam_; ++i)
+    for(int i=0; i<mnparam; ++i)
       maxlparams[i] = pv[i];
   }
 }

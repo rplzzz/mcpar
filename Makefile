@@ -20,7 +20,7 @@ include $(DEPS)
 
 lib: libmcpar.a
 
-all: mcpar-gauss mcpar-dgauss mcpar-rosen1-mpi.exe
+all: mcpar-dgauss-mpi mcpar-rosen1-mpi.exe
 
 libmcpar.a: $(OBJS)
 	ar -ru libmcpar.a $(OBJS)

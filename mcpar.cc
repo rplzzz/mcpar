@@ -120,9 +120,9 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     
     if(logging && isamp%logstep == 0) {
       logfile << "sample step " << isamp << ":\toutsamples size= " << outsamples.size()
-              << "  maxsize = " << outsamples.maxsize() << "  nparam= " << outsamples.nparam()
+              << "  maxsize = " << outsamples.maxsize() << "  ncol= " << outsamples.ncol()
               << "\n\tvsize = " << outsamples.vsize() << "  offset = "
-              << (isamp*outsamples.nparam()) << std::endl;
+              << (isamp*outsamples.ncol()) << std::endl;
     }
     if(isamp%SYNCSTEP == 0 && mpi) {
       int ngather = 2*ntot;
