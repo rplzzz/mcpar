@@ -15,7 +15,8 @@ class MCout
   std::vector<float> pvals;
   std::vector<float> maxlparams;
   float maxlval;
-  const int nparam_;
+  const int mnparam;            // number of model parameters
+  const int mncol;              // number of data columns = # of parameters + 1
   int next;
   int npset;                     // number of parameter sets stored
   int maxsamps;                  // maximum number of parameter sets that can be stored
@@ -31,15 +32,16 @@ public:
   MCout(int np, std::ostream *aoutstream, MPI_Comm acomm);
   void newsamps(int nsamp) {
     maxsamps += nsamp;
-    int newsize = pvals.size() + nsamp*nparam_;
+    int newsize = pvals.size() + nsamp*mncol;
     pvals.resize(newsize);
   }
   void add(const float *pv, float lval);
   int size(void) const {return npset;}
   int maxsize(void) const {return maxsamps;}
-  int nparam(void) {return nparam_;}
+  int ncol(void) {return mncol;}
   int vsize(void) const {return pvals.size();}
-  const float *getpset(int i) const {return &pvals[i*nparam_];}
+  const float *getpset(int i) const {return &pvals[i*mncol];}
+  float getlval(int i) const {return pvals[(i+1)*mncol - 1];}  
   void output();
   float * collect(size_t *ntot);
   void rewind(void) {nextout = 0;}

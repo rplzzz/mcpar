@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
   std::ofstream outfile(ofname.str().c_str());
   for(int i=0; i<rslts.size(); ++i) {
     const float *pset = rslts.getpset(i);
-    for(int j=0; j<rslts.nparam(); ++j)
+    for(int j=0; j<rslts.ncol()-1; ++j)
       outfile << pset[j] << "\t";
     outfile << "\n";
   }
