@@ -60,7 +60,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     L(nchain, ptrial, lytrial);
 
     // fill acpt with random numbers uniform on [0,1]
-    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
+    VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
     
     ntrial += nchain;
     for(int j=0; j<nchain; ++j) {
@@ -143,7 +143,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     if(isamp<SYNCSTEP)
       rndlocal = 0.0f;        // no data for remote proposal yet.
     else
-      VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, 1, &rndlocal, 0.0f, 1.0f)) ;
+      VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, 1, &rndlocal, 0.0f, 1.0f)) ;
     
     // Should cfac include the total pdf (i.e., cfac = 0.9*cflocal +
     // 0.1*cfremote, irrespective of whether we are doing a remote or
@@ -161,7 +161,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     L(nchain, ptrial,lytrial);
     
     // fill acpt with random numbers uniform on [0,1]
-    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
+    VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
     
     ntrial += nchain;
     for(int j=0; j<nchain; ++j) {
@@ -304,7 +304,7 @@ int MCPar::genLocal(const float pvals[], float *restrict ptrial, float *restrict
 {
   for(int j=0; j<nchain; ++j) {
     int indx = j*nparam;
-    VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+    VSL_CALL_CHK(vsRngGaussianMV(VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2, rng, 1,
                                  ptrial+indx, nparam, VSL_MATRIX_STORAGE_FULL,
                                  pvals+indx, cov ));
     cfac[j] = 1.0f;             // gaussian is symmetric
@@ -339,7 +339,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
   
     // get random integer from 0..tchains-1 for each chain.  We will use
     // that to select a Q_i.
-    int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 0, tchains);
+    int stat = viRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, chnsel, 0, tchains);
     
     for(int j=0; j<nchain; ++j) {
       if(rjct[j]) {
@@ -350,7 +350,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
           // recall "sig" is actually sig^2 -- have to take sqrt to get Cholesky decomp
           sigtrial[cindx] = sqrt(musigall[tindx+1]);
         } 
-        VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+        VSL_CALL_CHK(vsRngGaussianMV(VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2, rng, 1,
                                      ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
                                      mutrial+j*nparam, sigtrial+j*nparam )) ;
       }
@@ -403,7 +403,7 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
       pacpt[j] = qimax[j]/qisum[j];      // ==0.0 for any chains that have already been accepted
     
     // generate acpt
-    VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f));
+    VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f));
 
     anyrjct = 0;
     
@@ -506,21 +506,18 @@ int MCPar::genRemote(const float pvals[], float * restrict ptrial, float * restr
   
   covar_setup(fullcov,ucmat);
   
-  int stat = viRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nchain, chnsel, 0, ndist);
+  int stat = viRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, chnsel, 0, ndist);
 
   for(int j=0;j<nchain;++j) {
     int muindx = 2*chnsel[j];
 
     if(gaussian) {
-      VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
+      VSL_CALL_CHK(vsRngGaussianMV(VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2, rng, 1,
                                    ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
                                    muvals+muindx, unitcov) );
-//       VSL_CALL_CHK(vsRngGaussianMV(VSL_METHOD_SGAUSSIANMV_BOXMULLER2, rng, 1,
-//                                    ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_FULL,
-//                                    muvals+muindx, ucmat) );
     }
     else {
-      VSL_CALL_CHK(vsRngUniform(VSL_METHOD_SUNIFORM_STD, rng, nparam, ptrial+j*nparam, -5.0f, 5.0f));
+      VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nparam, ptrial+j*nparam, -5.0f, 5.0f));
     }
   }
   

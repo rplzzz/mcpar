@@ -13,7 +13,6 @@ int main(int argc, char *argv[])
   const float gmu[2] = {0.0f,0.0f};
   const float gsig2[2] = {1.0f, 2.0f};
   Rosenbrock1 L(2);
-  MCout rslts(nparam);
   int nsamp = 100000;
 
   // Set up MPI
@@ -22,6 +21,10 @@ int main(int argc, char *argv[])
     std::cerr << "Error on MPI_Init.  Exiting.\n";
     return mpistat;
   }
+
+  // Set up the results object.
+  MCout rslts(nparam, &std::cout, MPI_COMM_WORLD);
+
   int size,rank;
   MPI_Comm_size(MPI_COMM_WORLD,&size);
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
@@ -42,16 +45,7 @@ int main(int argc, char *argv[])
   mcpar.run(nsamp ,500, pinit, L, rslts);
 
   // output
-  std::stringstream ofname;
-  ofname << "mcpar-rosen1." << std::setfill('0') << std::setw(3) << rank << ".txt";
-  //std::string ofn(ofname.str());
-  std::ofstream outfile(ofname.str().c_str());
-  for(int i=0; i<rslts.size(); ++i) {
-    const float *pset = rslts.getpset(i);
-    for(int j=0; j<rslts.nparam(); ++j)
-      outfile << pset[j] << "\t";
-    outfile << "\n";
-  }
+  rslts.output();
 
   MPI_Finalize();
   
