@@ -9,7 +9,7 @@ LIBS = #-lmpi
 CXX	  = mpicxx
 ### We have flags for both g++ and intel c++.  Choose as appropriate
 ### g++ flags:
-CXXFLAGS = -g -MMD -O3 -ffast-math -ftree-vectorizer-verbose=2 -I$(MKLINC) -Drestrict=__restrict__ -static-libstdc++
+CXXFLAGS = -g -MMD -O3 -ffast-math -ftree-vectorize -fopt-info-vec -I$(MKLINC) -Drestrict=__restrict__ -static-libstdc++
 ### icpc flags:
 ###CXXFLAGS = -g -MMD -O0 -axSSE3 -fno-inline-functions -vec-report3 -I$(MKLINC) -restrict
 
