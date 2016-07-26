@@ -18,6 +18,10 @@ DEPS = $(OBJS:.o=.d)
 
 -include $(DEPS)
 
+ifdef USE_RFUNC
+include Makefile.R 
+endif 
+
 lib: libmcpar.a
 
 all: mcpar-dgauss-mpi mcpar-rosen1-mpi.exe

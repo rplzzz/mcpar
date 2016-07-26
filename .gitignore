@@ -1,5 +1,6 @@
 # Ignore object files
 *.o
+*.a
 
 # compiled python files
 *.pyc
@@ -9,6 +10,7 @@ mcpar-gauss
 mcpar-dgauss
 mcpar-dgauss-mpi
 *.exe
+mcpar-rfunc
 
 # Ignore emacs backup files
 *~
