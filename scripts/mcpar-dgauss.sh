@@ -8,5 +8,5 @@ module load openmpi
 module load mkl/15.0.1
 module load gcc/6.1.0
 
-mpirun -np 8 $wdir/mcpar-dgauss-mpi
+mpirun -np 8 $wdir/mcpar-dgauss
 

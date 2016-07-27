@@ -54,7 +54,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   
   // first step - burn in.  Run the MC, but don't perform any remote updates
   logfile << "Starting burn-in.  Samples = " << nburn << std::endl;
-  int irate = 10;               // XXX reset to 50 when testing complete
+  int irate = 50;
   for(int isamp = 0; isamp<nburn; ++isamp) {
     genLocal(pvals, ptrial, cfac);
     L(nchain, ptrial, lytrial);
@@ -92,7 +92,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
           cov[i] *= SCALE_INC;  // XXX wasted effort.
       } 
       // evaluate again in 50 steps
-      irate += 10;              // XXX reset to 50 when testing complete
+      irate += 50;
     } 
   }
 
@@ -112,10 +112,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   for(int isamp=0; isamp<nsamp; ++isamp) {
     // output if it's time to do so
     if(isamp % outstep == 0 && isamp > 0) {
-      //std::cout << "dumping output at isamp= " << isamp << std::endl;
       outsamples.output();
-      //std::cout << "done" << std::endl;
-      //sleep(5);
     }
     
     if(logging && isamp%logstep == 0) {
@@ -155,7 +152,6 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     }
     else {
       genRemote(pvals, musigall, ptrial, cfac);
-      //genRemote(pvals, ptrial, cfac);
       remotep = 1;
     }
     L(nchain, ptrial,lytrial);
@@ -320,10 +316,6 @@ int MCPar::genRemote(const float pvals[], float * restrict musigall,
   const float mutest[] = {1.0f,2.0f, 0.0f,2.0f, 0.0f,2.0f, 1.0f,2.0f, -1.0f,2.0f,
                           0.0f,2.0f, 0.0f,2.0f, -1.0f,2.0f};
   
-//   for(int i=0;i<16;++i)
-//     musigall[i] = mutest[i];
-
-  
   // Each mu, sigma set (one pair for each parameter) defines a
   // distribution Q_i.  We want to choose over the distribution
   // max_i(Q_i), and we will do that by choosing from Sum_i(Q_i) and
@@ -486,63 +478,4 @@ void MCPar::covar_setup(const float *incov, float *restrict cov)
 
   // Modulo some scaling, this factorization should be good for the
   // remainder of the run.
-}
-
-  
-int MCPar::genRemote(const float pvals[], float * restrict ptrial, float * restrict cfac)
-{
-  // pick from one of 4 fixed gaussian distributions
-  const float muvals[8] = {1.0f,0.0f, 0.0f,1.0f, -1.0f,0.0f, 0.0f,-1.0f};
-  // const float muvals[8] = {0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f, 0.0f,0.0f};
-  float unitcov[2] = {2.0f,2.0f};
-  float uc2[2];
-  float fullcov[4] = {0.5f, 0.0f, 0.0f, 0.5f}; 
-  float ucmat[4];
-  const int ndist = 4;
-  const int gaussian = 1;
-
-  for(int i=0;i<2;++i)
-    uc2[i] = unitcov[i]*unitcov[i];
-  
-  covar_setup(fullcov,ucmat);
-  
-  int stat = viRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, chnsel, 0, ndist);
-
-  for(int j=0;j<nchain;++j) {
-    int muindx = 2*chnsel[j];
-
-    if(gaussian) {
-      VSL_CALL_CHK(vsRngGaussianMV(VSL_RNG_METHOD_GAUSSIAN_BOXMULLER2, rng, 1,
-                                   ptrial+j*nparam, nparam, VSL_MATRIX_STORAGE_DIAGONAL,
-                                   muvals+muindx, unitcov) );
-    }
-    else {
-      VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nparam, ptrial+j*nparam, -5.0f, 5.0f));
-    }
-  }
-  
-  // calculate cfac
-  // cfac is Q(pvals)/Q(ptrial)
-  for(int j=0; j<nchain; ++j) {
-    int pindx  = nparam*j;
-    float cpv  = 0.0f;
-    float cpt  = 0.0f;
-    
-    for(int dist=0; dist<ndist; ++dist) {
-      int muindx = 2*dist;
-      float arg1 = pvals[pindx]   - muvals[muindx];
-      float arg2 = pvals[pindx+1] - muvals[muindx+1];
-      cpv += exp(-0.5*(arg1*arg1/uc2[0] + arg2*arg2/uc2[1]));
-
-      arg1 = ptrial[pindx]   - muvals[muindx];
-      arg2 = ptrial[pindx+1] - muvals[muindx+1];
-      cpt += exp(-0.5*(arg1*arg1/uc2[0] + arg2*arg2/uc2[1])); 
-    }
-
-    if(gaussian)
-      cfac[j] = cpv/cpt;
-    else
-      cfac[j] = 1.0f;
-  }
-  return 0;
 }

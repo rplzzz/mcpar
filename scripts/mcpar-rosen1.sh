@@ -8,5 +8,5 @@ module load openmpi
 module load mkl/15.0.1
 module load gcc/6.1.0
 
-mpirun -np 24 ./mcpar-rosen1-mpi.exe
+mpirun -np 24 ./mcpar-rosen1.exe
 

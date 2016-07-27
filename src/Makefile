@@ -24,7 +24,7 @@ endif
 
 lib: libmcpar.a
 
-all: mcpar-dgauss-mpi mcpar-rosen1-mpi.exe
+all: mcpar-dgauss.exe mcpar-rosen1.exe
 
 libmcpar.a: $(OBJS)
 	ar -ru libmcpar.a $(OBJS)
