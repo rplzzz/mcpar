@@ -2,8 +2,10 @@
 /* Since this likelihood function uses the R libraries, building it is
    optional.  Defining the variable USE_RFUNC in your environment will
    cause it to be built. */
+#include "mpi.h"
 #include "rfunc.hh"
-#include <RInside.h> 
+#include <RInside.h>
+
 
 RFunc::RFunc(int anparam, const std::string &asrcfile, const std::string &ainputfile, int argc, char *argv[]) :
   nparam(anparam),
@@ -24,6 +26,11 @@ void RFunc::setup(int argc, char *argv[])
   std::string srccmd = "source('" + srcfile + "')";
   Rp->parseEvalQ(srccmd);
 
+  // store the MPI rank, just in case we need it for some reason
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  (*Rp)["input.mpi.rank"] = rank;
+
   // Call the mc.setup function
   std::string setupcmd = "mc.setup('" + inputfile + "')";
   Rp->parseEvalQ(setupcmd);
@@ -37,6 +44,9 @@ int RFunc::operator()(int npset, const float *x, float *restrict y)
   // TODO:  avoid reallocating these vectors and strings every time we call this function.
   Rcpp::NumericVector xR(x,x+ntot);
   std::string lfcmd = "mc.likelihood(input.params, input.npset)";
+
+  for(int i=0;i<ntot;++i)
+    xR[i] = x[i];
 
   (*Rp)["input.params"] = xR;
   (*Rp)["input.npset"] = npset;
