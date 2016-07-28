@@ -19,7 +19,7 @@ DEPS = $(OBJS:.o=.d)
 -include $(DEPS)
 
 ifdef USE_RFUNC
-include Makefile.R 
+include Makefile-Rfuncs 
 endif 
 
 lib: libmcpar.a
