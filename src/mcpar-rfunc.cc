@@ -26,21 +26,39 @@ int main(int argc, char *argv[])
 
   // check arguments
   // usage:  mcpar-rfunc <R-Source> <Input-Data> <nsamp> <Output-file>
-  if(argc != 5) {
-    std::cerr << "Usage: " << argv[0] << " <R-Source> <Input-Data> <nsamp> <Output-file>\n";
+  if(argc < 4) {
+    std::cerr << "Usage: " << argv[0] << " <R-Source> <Input-Data> <Output-file> [nwarmup] [nsamp]\n";
   }
   std::string Rfile(argv[1]);
   std::string Dfile(argv[2]); 
-  std::string Ofile(argv[4]); 
+  std::string Ofile(argv[3]); 
   std::ofstream outfile(Ofile);      // stream for output file
   // set up results object
   MCout rslts(NPARAM, &outfile, MPI_COMM_WORLD);
   // number of samples
-  int nsamp = atoi(argv[3]);
-  if(nsamp <= 0)
-    nsamp = 100;
+  int nsamp = 100;
+  int nwarmup = 1; // This default is way too small for a production calculation; it's meant for preliminary testing. 
+
+  if(argc > 4) {
+    int nwtmp = atoi(argv[4]);
+    if(nwtmp > 0)
+      nwarmup = nwtmp;
+    else
+      std::cerr << "Arg value for nwarmup is bogus: " << argv[4]
+                << "\nUsing default value of " << nwarmup << "\n";
+  }
+
+  if(argc > 5) {
+    int nstmp = atoi(argv[5]);
+    if(nstmp > 0)
+      nsamp = nstmp;
+    else
+      std::cerr << "Arg value for nsamp is bogus: " << argv[5]
+                << "\nUsing default value of " << nsamp << "\n";
+  }
+
   if(rank==0)
-    std::cout << "nsamp = " << nsamp << "\n";
+    std::cout << "nwarmup = " << nwarmup <<  "\tnsamp = " << nsamp << "\n";
   
   
   /* Set up vectors for model parameters.  Parameters are:
@@ -58,7 +76,10 @@ int main(int argc, char *argv[])
   
   // Set up and run the parallel MC
   MCPar mcpar(NPARAM, NPSET, size, rank);
-  mcpar.run(nsamp, 500, pguess, L, rslts);
+  // Uncomment the next two lines to log progress updates while the code runs.
+  // mcpar.logging = true;
+  // mcpar.logstep = 10;
+  mcpar.run(nsamp, nwarmup, pguess, L, rslts);
 
   // Write output
   rslts.output();

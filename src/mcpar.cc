@@ -109,10 +109,13 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   // chains in this process.
   int outstep = nsamp > 50 ? nsamp/10 : 5; // number of steps between output dumps
   logfile << "Starting main sample loop:  nsamp = " << nsamp << std::endl;
+  logfile << "Output after each " << outstep << " steps." << std::endl;
   for(int isamp=0; isamp<nsamp; ++isamp) {
     // output if it's time to do so
     if(isamp % outstep == 0 && isamp > 0) {
+      logfile << "Beginning output at step " << isamp << std::endl;
       outsamples.output();
+      logfile << "Output finished\n" << std::endl;
     }
     
     if(logging && isamp%logstep == 0) {
