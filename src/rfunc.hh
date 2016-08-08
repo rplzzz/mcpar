@@ -36,21 +36,30 @@
 class RFunc : public VLFunc
 {
 private:
-  
-  int nparam;                   // need the number of parameters b/c it's not passed to operator()
-  std::string srcfile;
-  std::string inputfile;
 
+  // Information about model parameters.  This is returned by the mc.setup function in the R model.
+  int _nparam;                   // need the number of parameters b/c it's not passed to operator() 
+  std::vector<float> _plo;       // recommended low values of parameters for initial guess
+  std::vector<float> _phi;       // recommended high values of parameters for initial guess
+
+  // R instance pointer
   std::unique_ptr<RInside> Rp;
 
-  void setup(int argc, char *argv[]);
+  // setup function called by constructor.
+  void setup(int argc, char *argv[], const std::string &srcfile, const std::string &inputfile);
 
 public:
   // constructor: First argument is the name of the file with the R
   // source; second is the file with the input data.  argc and argv
   // are the arguments to main().
-  RFunc(int nparam, const std::string &asrcfile, const std::string &ainputfile, int argc, char *argv[]);
+  RFunc(const std::string &asrcfile, const std::string &ainputfile, int argc, char *argv[]);
   virtual int operator()(int anpset, const float *x, float *restrict y);
+
+  // additional interface:  reader methods for the state returned by the R setup
+  int nparam(void) {return _nparam;}
+  const std::vector<float> &plo(void) {return _plo;}
+  const std::vector<float> &phi(void) {return _phi;}
+  
 };
 
 

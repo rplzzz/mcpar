@@ -7,17 +7,14 @@
 #include <RInside.h>
 
 
-RFunc::RFunc(int anparam, const std::string &asrcfile, const std::string &ainputfile, int argc, char *argv[]) :
-  nparam(anparam),
-  srcfile(asrcfile),
-  inputfile(ainputfile)
+RFunc::RFunc(const std::string &asrcfile, const std::string &ainputfile, int argc, char *argv[])
 {
   // call the setup function, which will initialize R
-  setup(argc, argv);
+  setup(argc, argv, asrcfile, ainputfile);
 }
 
 
-void RFunc::setup(int argc, char *argv[])
+void RFunc::setup(int argc, char *argv[], const std::string &srcfile, const std::string &inputfile)
 {
   // start up the embedded R environment
   Rp.reset(new RInside(argc,argv));
@@ -31,16 +28,26 @@ void RFunc::setup(int argc, char *argv[])
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   (*Rp)["input.mpi.rank"] = rank;
 
-  // Call the mc.setup function
+  // Call the mc.setup function.  The setup function returns a matrix
+  // of recommended limits for the parameter values.
   std::string setupcmd = "mc.setup('" + inputfile + "')";
-  Rp->parseEvalQ(setupcmd);
+  Rcpp::NumericMatrix plohi = Rp->parseEval(setupcmd);
+  // This matrix gives us the information we need to fill out the parameter info.
+  _nparam = plohi.ncol();
+  _plo.resize(_nparam);
+  _phi.resize(_nparam);
+
+  for(int j=0; j<_nparam; ++j) {
+    _plo[j] = plohi(0,j);         // plo is in the first row.
+    _phi[j] = plohi(1,j);         // phi is in the second.
+  }
 
   // R should now be ready to go.
 }
 
 int RFunc::operator()(int npset, const float *x, float *restrict y)
 {
-  int ntot = npset*nparam;
+  int ntot = npset*_nparam;
   // TODO:  avoid reallocating these vectors and strings every time we call this function.
   Rcpp::NumericVector xR(x,x+ntot);
   std::string lfcmd = "mc.likelihood(input.params, input.npset)";

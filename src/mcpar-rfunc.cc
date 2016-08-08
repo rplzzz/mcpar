@@ -33,8 +33,6 @@ int main(int argc, char *argv[])
   std::string Dfile(argv[2]); 
   std::string Ofile(argv[3]); 
   std::ofstream outfile(Ofile);      // stream for output file
-  // set up results object
-  MCout rslts(NPARAM, &outfile, MPI_COMM_WORLD);
   // number of samples
   int nsamp = 100;
   int nwarmup = 1; // This default is way too small for a production calculation; it's meant for preliminary testing. 
@@ -61,21 +59,20 @@ int main(int argc, char *argv[])
     std::cout << "nwarmup = " << nwarmup <<  "\tnsamp = " << nsamp << "\n";
   
   
-  /* Set up vectors for model parameters.  Parameters are:
-     As, An, xiss, xins, xisn, xinn, eps1n, lambda_s, k_s
-  */
-  // Minimum and maximum values of initial guesses for model parameters
-  float plo[NPARAM] = {0.001f, 0.001f, -2.0f, -1.0f, -1.0f, -2.0f, 0.05f, 0.0f, 0.001f};
-  float phi[NPARAM] = {1.0f,   1.0f,   0.0f,   1.0f,  1.0f,  0.0f, 1.5f,  5.0f, 10.0f};
-  float pguess[NPARAM*NPSET];
-  mcutil mcu;
-  mcu.qriguess(rank, NPSET, NPARAM, plo, phi, pguess);
-
   // Set up the R likelihood function
-  RFunc L(NPARAM, Rfile, Dfile, argc, argv);
-  
+  RFunc L(Rfile, Dfile, argc, argv);
+  const int nparam = L.nparam();
+  std::vector<float> plo = L.plo();
+  std::vector<float> phi = L.phi();
+
+  // set up results object
+  MCout rslts(nparam, &outfile, MPI_COMM_WORLD); 
+  float *pguess = new float[nparam*NPSET];
+  mcutil mcu;
+  mcu.qriguess(rank, NPSET, nparam, &plo[0], &phi[0], pguess);
+
   // Set up and run the parallel MC
-  MCPar mcpar(NPARAM, NPSET, size, rank);
+  MCPar mcpar(nparam, NPSET, size, rank);
   // Uncomment the next two lines to log progress updates while the code runs.
   // mcpar.logging = true;
   // mcpar.logstep = 10;
@@ -88,6 +85,8 @@ int main(int argc, char *argv[])
   if(rank==0)
     std::cout << "FIN.\n";
 
+  delete [] pguess;
+  
   MPI_Finalize();
   return 0;
 }
