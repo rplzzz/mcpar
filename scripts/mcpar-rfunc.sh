@@ -1,7 +1,7 @@
 #!/bin/zsh
 
-#SBATCH -n 96
-#SBATCH -t 30
+#SBATCH -n 192
+#SBATCH -t 24:00:00
 #SBATCH -A GCAM
 
 module load openmpi
@@ -10,7 +10,7 @@ module load gcc/6.1.0
 
 date
 
-time mpirun -np 96 ./mcpar-rfunc /people/link593/wrk/food-demand/src/R/food-demand.R  /people/link593/wrk/food-demand/data/obsdata-test-grand.csv ../runs/rfunc-test.dat 1 5
+time mpirun -np 192 ./mcpar-rfunc /people/link593/wrk/food-demand/src/R/food-demand-mc.R  /people/link593/wrk/food-demand/data/food-dmnd-price-hist.csv ../runs/rfunc-hist.dat 1000 2000
 
 date
 
