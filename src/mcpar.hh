@@ -23,6 +23,7 @@ public:
                                 // posterior estimates
 
   static const float FPEPS;     // small number for preventing divide by zero and the like
+  static const int itune;       // tuning interval during burn-in.
 
   // logging switches.  Users may set and reset these as desired
   bool logging;

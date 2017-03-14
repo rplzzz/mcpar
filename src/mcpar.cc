@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 const float MCPar::FPEPS = 1.0e-14;
+const int MCPar::itune = 20;
 
 int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsamples,
                float * incov)
@@ -52,37 +53,40 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
   // get the initial y values
   L(nchain, pvals, lylast);
   
-  // first step - burn in.  Run the MC, but don't perform any remote updates
-  logfile << "Starting burn-in.  Samples = " << nburn << std::endl;
-  int irate = 50;
-  for(int isamp = 0; isamp<nburn; ++isamp) {
-    genLocal(pvals, ptrial, cfac);
-    L(nchain, ptrial, lytrial);
-
-    // fill acpt with random numbers uniform on [0,1]
-    VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, nchain, acpt, 0.0f, 1.0f)) ;
-    
-    ntrial += nchain;
-    for(int j=0; j<nchain; ++j) {
-      pacpt[j] = exp(lytrial[j]-lylast[j]);
-      lylast[j] = acpt[j]<pacpt[j] ? lytrial[j] : lylast[j];
-      naccept  += acpt[j]<pacpt[j];
-    } 
-    for(int i=0; i<ntot; ++i) {
-      int j = i/nparam;
-      if(acpt[j] < pacpt[j])
-        pvals[i] = ptrial[i];
+  // initialize mu and psum2
+  for(int i=0;i<ntot;++i) {
+    mu[i] = 0.0f;
+    psum2[i] = FPEPS;           // prevent divide by zero
+  }
+  float pwgt=0.0f;               // total weight in the mu, sigma calcs.
+  
+  // Run the markov chain sampling.  This loop includes the burn-in as
+  // well as the keeper samples.  To keep the calc well-vectorized, we
+  // do one check for whether to take a local proposal or a remote one
+  // and apply it to all of the chains in this process.
+  int irate = itune-nburn;
+  int totsamp = nsamp + nburn;
+  int outstep = nsamp > 50 ? nsamp/10 : 5; // number of steps between output dumps
+  logfile << "Starting main sample loop:  nburn = " << nburn
+          << "  nsamp = " << nsamp << std::endl; 
+  logfile << "Output after each " << outstep << " steps." << std::endl;
+  for(int isamp=-nburn; isamp<nsamp; ++isamp) {
+    if(isamp > 0 && isamp % outstep == 0) {
+      // output if it's time to do so.  This happens only during the
+      // keeper iterations.
+      logfile << "Beginning output at step " << isamp << std::endl;
+      outsamples.output();
+      logfile << "Output finished\n" << std::endl;
     }
-
-    // tune acceptance rate
-    if(isamp>irate) {
+    else if(isamp < 0 && isamp>irate) {
+      // tune acceptance rate.  This happens only during burn-in 
       float arate = naccept/ntrial;
       if(arate < TGT_ARATE_MIN) {
-        naccept = ntrial = 0.0f; // reset the counters if we change size
+        naccept = ntrial = 0.0f; // reset the counters if we change cov
         // scale covariance matrix.
         // XXX cov actually contains the Cholesky factorization of the covariance
         //     matrix.  Should we therefore be multiplying by the sqrt of the factor
-        //     we really want
+        //     we really want?
         for(int i=0; i<ncov; ++i)
           cov[i] *= SCALE_DEC;  // XXX some wasted effort here, since cov is symmetric
       }
@@ -92,38 +96,25 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
           cov[i] *= SCALE_INC;  // XXX wasted effort.
       } 
       // evaluate again in 50 steps
-      irate += 50;
-    } 
-  }
-
-  // initialize mu and psum2
-  for(int i=0;i<ntot;++i) {
-    mu[i] = 0.0f;
-    psum2[i] = FPEPS;           // prevent divide by zero
-  }
-  float pwgt=0.0f;               // total weight in the mu, sigma calcs.
-  
-  // run the "keeper" samples, including remote proposals.  To keep
-  // the calc well-vectorized, we do one check for whether to take a
-  // local proposal or a remote one and apply it to all of the
-  // chains in this process.
-  int outstep = nsamp > 50 ? nsamp/10 : 5; // number of steps between output dumps
-  logfile << "Starting main sample loop:  nsamp = " << nsamp << std::endl;
-  logfile << "Output after each " << outstep << " steps." << std::endl;
-  for(int isamp=0; isamp<nsamp; ++isamp) {
-    // output if it's time to do so
-    if(isamp % outstep == 0 && isamp > 0) {
-      logfile << "Beginning output at step " << isamp << std::endl;
-      outsamples.output();
-      logfile << "Output finished\n" << std::endl;
+      irate += itune;
     }
-    
+
+    // Log progress if it's time to do so.
     if(logging && isamp%logstep == 0) {
       logfile << "sample step " << isamp << ":\toutsamples size= " << outsamples.size()
               << "  maxsize = " << outsamples.maxsize() << "  ncol= " << outsamples.ncol()
               << "\n\tvsize = " << outsamples.vsize() << "  offset = "
               << (isamp*outsamples.ncol()) << std::endl;
     }
+
+    // Synchronize stats for other chains from MPI peers.
+    // NB: Because this is a collective, it can be a source of delay
+    // if the time required to evaluate the model is not varies a
+    // lot.  It's not particularly important to keep this information
+    // completely up to date, so we could use a nonblocking
+    // collective to post its information to the rest of the chains.
+    // When the collective completes we can update the remote stats;
+    // until then, we can  continue to use the old information.
     if(isamp%SYNCSTEP == 0 && mpi) {
       int ngather = 2*ntot;
       if(logging)
@@ -140,7 +131,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     }
       
     float rndlocal;            // random draw to see if we do local or remote proposal
-    if(isamp<SYNCSTEP)
+    if(isamp<SYNCSTEP-nburn)
       rndlocal = 0.0f;        // no data for remote proposal yet.
     else
       VSL_CALL_CHK(vsRngUniform(VSL_RNG_METHOD_UNIFORM_STD, rng, 1, &rndlocal, 0.0f, 1.0f)) ;
@@ -148,7 +139,7 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
     // Should cfac include the total pdf (i.e., cfac = 0.9*cflocal +
     // 0.1*cfremote, irrespective of whether we are doing a remote or
     // local update)?
-    int remotep;                // was this a remote proposal?
+    int remotep;                // flag: was this a remote proposal?
     if(rndlocal <= PLOCAL) {     
       genLocal(pvals, ptrial, cfac);
       remotep = 0;
@@ -173,13 +164,15 @@ int MCPar::run(int nsamp, int nburn, const float *pinit, VLFunc &L, MCout &outsa
       if(acpt[j] < pacpt[j])
         pvals[i] = ptrial[i];
     }
-    // Add the new samples to the list
-    for(int j=0; j<nchain; ++j) {
-      int idx = j*nparam;
-      float y;
-      L(1,pvals+idx,&y);
-      outsamples.add(pvals+idx,lylast[j]);
-    } 
+    // Add the new samples to the list, but only if we've passed the burn-in.
+    if(isamp >= 0) {
+      for(int j=0; j<nchain; ++j) {
+        int idx = j*nparam;
+        float y;
+        L(1,pvals+idx,&y);
+        outsamples.add(pvals+idx,lylast[j]);
+      }
+    }
 
     // Update the running estimates of mean and variance for each
     // chain
